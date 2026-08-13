@@ -63,6 +63,8 @@ jobs:
           mkdir -p data logs reports
 
       - name: 策略信号探针（诊断输出，失败不阻塞主流程）
+        env:
+          STOCK_LIST_CONFIG: ${{ vars.STOCK_LIST || secrets.STOCK_LIST }}
         run: |
           if [ -n "${STOCK_LIST_CONFIG:-}" ]; then
             export STOCK_LIST="$STOCK_LIST_CONFIG"
