@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import date
 from pathlib import Path
@@ -95,14 +96,23 @@ def load_probe_config(config_dir: Path) -> Tuple[Dict[str, Any], List[Dict[str, 
 
 
 def resolve_watchlist(cfg: Dict[str, Any]) -> List[str]:
-    """Resolve symbols to probe: config override > active STOCK_LIST."""
+    """Resolve symbols to probe: config override > STOCK_LIST env (incl. .env).
+
+    Deliberately avoids the AppSettings singleton (import cycles for a CLI
+    tool); loads local `.env` via dotenv when present, mirroring setup_env.
+    """
     override = cfg.get("watchlist_override") or []
     if override:
         return [str(c) for c in override]
-    from src.core.config_manager import singleton_config
+    try:
+        from dotenv import load_dotenv
 
-    stock_list = getattr(singleton_config(), "stock_list", None) or []
-    codes = [str(c) for c in stock_list if c]
+        load_dotenv()
+    except Exception:  # noqa: BLE001 - dotenv optional in prod runner
+        pass
+    from src.services.stock_list_parser import split_stock_list
+
+    codes = [str(c) for c in split_stock_list(os.getenv("STOCK_LIST", "")) if c]
     if not codes:
         raise ProbeError(
             "watchlist empty: set STOCK_LIST in .env or watchlist_override in config.yaml"

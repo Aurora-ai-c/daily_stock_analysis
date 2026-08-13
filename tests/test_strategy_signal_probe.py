@@ -102,6 +102,22 @@ def test_detect_st_names():
     assert not PROBE._detect_st("")
 
 
+def test_resolve_watchlist_override_first(monkeypatch):
+    monkeypatch.setenv("STOCK_LIST", "600519")
+    assert PROBE.resolve_watchlist({"watchlist_override": ["000001"]}) == ["000001"]
+
+
+def test_resolve_watchlist_env(monkeypatch):
+    monkeypatch.setenv("STOCK_LIST", "600519, 300750")
+    assert PROBE.resolve_watchlist({"watchlist_override": []}) == ["600519", "300750"]
+
+
+def test_resolve_watchlist_empty_raises(monkeypatch):
+    monkeypatch.setenv("STOCK_LIST", "")  # 空串阻止 load_dotenv 注入本地 .env 值
+    with pytest.raises(PROBE.ProbeError):
+        PROBE.resolve_watchlist({"watchlist_override": []})
+
+
 def test_enrich_ohlcv_adds_prev_close_and_flags():
     import pandas as pd
 
