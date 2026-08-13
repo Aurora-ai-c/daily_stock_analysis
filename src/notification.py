@@ -419,8 +419,19 @@ class NotificationService(
         """Generate the aggregate report content used by merge/save/push paths."""
         normalized_type = self._normalize_report_type(report_type)
         if normalized_type == ReportType.BRIEF:
-            return self.generate_brief_report(results, report_date=report_date)
-        return self.generate_dashboard_report(results, report_date=report_date)
+            report = self.generate_brief_report(results, report_date=report_date)
+        else:
+            report = self.generate_dashboard_report(results, report_date=report_date)
+        # 策略信号章节（默认关闭，STRATEGY_SIGNALS_ENABLED 开启；失败静默降级）
+        try:
+            from src.alphaevo_bridge import render_strategy_signal_section
+
+            section = render_strategy_signal_section(results)
+        except Exception:  # noqa: BLE001 - optional section must never break the report
+            section = None
+        if section:
+            report = f"{report}\n\n---\n\n{section}"
+        return report
 
     def _collect_models_used(self, results: List[AnalysisResult]) -> List[str]:
         if not self._should_show_llm_model():
