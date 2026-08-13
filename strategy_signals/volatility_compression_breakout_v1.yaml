@@ -1,0 +1,164 @@
+api_version: 1
+warmup_days: 250
+meta:
+  id: volatility_compression_breakout_v1
+  family: volatility_compression_breakout
+  name: Volatility Compression Breakout
+  version: 1
+  parent_id: null
+  created_at: '2026-08-13'
+  market: a_share
+  category: trend
+  tags:
+  - trend
+  - breakout
+  - volatility-compression
+  - trailing-profit
+  preferred_regime:
+  - trending_up
+  - euphoria
+description: 'A-share adaptation of the builtin volatility-compression breakout.
+
+  Core logic:
+
+  1. Price closes above the prior 20-day high.
+
+  2. Volume >= 1.2x the 20-day average and candle body >= 45% of the range.
+
+  3. Price above a rising MA20, in the upper 65% of its 120-day range.
+
+  4. Bollinger width <= 0.14 (compression before expansion).
+
+  Entry: next open.
+
+  Stop loss: 5% below entry.
+
+  Take profit: trailing after 8% move, 4% giveback.
+
+  '
+universe:
+  market:
+  - a_share_main
+entry:
+  logic: and
+  triggers:
+  - indicator: breakout_high_20d
+    op: ==
+    value: true
+  - indicator: volume_ratio_1d_20d
+    op: '>='
+    value: 1.2
+  - indicator: body_to_range_ratio
+    op: '>='
+    value: 0.45
+  guards:
+  - indicator: close_above_ma20
+    op: ==
+    value: true
+  - indicator: ma20_slope
+    op: '>'
+    value: 0.0
+  - indicator: price_position_120d
+    op: '>='
+    value: 0.65
+  - indicator: bollinger_band_width_20d
+    op: <=
+    value: 0.14
+  - indicator: st_flag
+    op: ==
+    value: false
+  execution:
+    timing: next_open
+exit:
+  triggers:
+  - indicator: close_below_ma20
+    op: ==
+    value: true
+  stop_loss:
+    type: pct
+    value: 0.05
+  take_profit:
+    type: trailing
+    trigger_pct: 0.08
+    trail_pct: 0.04
+  max_holding_days: 20
+params:
+  tunable:
+  - target: entry.triggers[indicator=breakout_high_20d].indicator
+    range:
+    - 10
+    - 60
+    step: 5
+    label: Breakout lookback
+  - target: entry.triggers[indicator=volume_ratio_1d_20d].value
+    range:
+    - 1.0
+    - 2.8
+    step: 0.1
+    label: Volume ratio threshold
+  - target: entry.triggers[indicator=volume_ratio_1d_20d].indicator
+    range:
+    - 5
+    - 40
+    step: 5
+    label: Volume baseline window
+  - target: entry.triggers[indicator=body_to_range_ratio].value
+    range:
+    - 0.25
+    - 0.75
+    step: 0.05
+    label: Candle body threshold
+  - target: entry.guards[indicator=ma20_slope].value
+    range:
+    - 0.0
+    - 0.03
+    step: 0.0025
+    label: MA20 slope threshold
+  - target: entry.guards[indicator=price_position_120d].value
+    range:
+    - 0.45
+    - 0.90
+    step: 0.05
+    label: Price position threshold
+  - target: entry.guards[indicator=price_position_120d].indicator
+    range:
+    - 60
+    - 250
+    step: 10
+    label: Price position lookback
+  - target: entry.guards[indicator=bollinger_band_width_20d].value
+    range:
+    - 0.06
+    - 0.22
+    step: 0.01
+    label: Bollinger width threshold
+  - target: entry.guards[indicator=bollinger_band_width_20d].indicator
+    range:
+    - 10
+    - 40
+    step: 5
+    label: Bollinger lookback
+  - target: exit.stop_loss.value
+    range:
+    - 0.03
+    - 0.08
+    step: 0.005
+    label: Stop loss percentage
+  - target: exit.take_profit.trigger_pct
+    range:
+    - 0.04
+    - 0.14
+    step: 0.01
+    label: Trailing profit trigger
+  - target: exit.take_profit.trail_pct
+    range:
+    - 0.02
+    - 0.08
+    step: 0.01
+    label: Trailing giveback
+  - target: exit.max_holding_days
+    range:
+    - 5
+    - 40
+    step: 5
+    label: Max holding days

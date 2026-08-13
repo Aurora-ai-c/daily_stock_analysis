@@ -55,10 +55,27 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           python -c "import futu; print('✅ futu SDK import OK')"
+          # 策略信号依赖（ALPHAEVO 0.5.x 语义锁定；安装失败仅跳过信号章节，不阻塞主流程）
+          pip install "alphaevo>=0.5,<0.6" || echo "⚠️ alphaevo 安装失败，策略信号章节将跳过"
       
       - name: 创建必要目录
         run: |
           mkdir -p data logs reports
+
+      - name: 策略信号探针（诊断输出，失败不阻塞主流程）
+        run: |
+          if [ -n "${STOCK_LIST_CONFIG:-}" ]; then
+            export STOCK_LIST="$STOCK_LIST_CONFIG"
+          fi
+          if [ -z "${STOCK_LIST:-}" ]; then
+            echo "⏭️ 无自选股配置，跳过策略信号探针"
+            exit 0
+          fi
+          TIMEOUT_SECONDS="${STRATEGY_SIGNALS_TIMEOUT_SECONDS:-900}"
+          echo "⏱️ 探针超时: ${TIMEOUT_SECONDS}s"
+          timeout "${TIMEOUT_SECONDS}" python -m src.strategy_signal_probe \
+            --output "${STRATEGY_SIGNALS_PROBE_OUTPUT:-strategy_signals_latest.json}" \
+            || { echo "⚠️ 策略信号探针失败（主流程继续）"; true; }
       
       - name: 执行股票分析
         env:
@@ -425,6 +442,10 @@ jobs:
           # 可选值: tencent, akshare_sina, efinance, akshare_em, tickflow, tushare
           # 如果有 TickFlow 或 Tushare Pro，可按权限把 tickflow / tushare 放在更靠前位置
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
+          # 策略信号章节开关（默认关闭；开启后日报「摘要」之后插入「🧭 策略信号」章节）
+          STRATEGY_SIGNALS_ENABLED: ${{ vars.STRATEGY_SIGNALS_ENABLED || secrets.STRATEGY_SIGNALS_ENABLED || 'false' }}
+          # 策略信号探针诊断 JSON（与报告章节同源，仅用于排查）
+          STRATEGY_SIGNALS_PROBE_OUTPUT: ${{ vars.STRATEGY_SIGNALS_PROBE_OUTPUT || secrets.STRATEGY_SIGNALS_PROBE_OUTPUT || 'strategy_signals_latest.json' }}
           
         run: |
           # 解析自选股配置：
@@ -542,6 +563,7 @@ jobs:
           path: |
             reports/
             logs/
+            strategy_signals_latest.json
           retention-days: 30
       
       - name: 显示运行结果

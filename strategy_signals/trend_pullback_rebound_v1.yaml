@@ -1,0 +1,114 @@
+api_version: 1
+warmup_days: 120
+meta:
+  id: trend_pullback_rebound_v1
+  family: trend_pullback_rebound
+  name: 强趋势回踩放量反包
+  version: 1
+  parent_id: null
+  created_at: '2026-08-13'
+  market: a_share
+  category: trend
+  tags:
+  - 趋势
+  - 回踩
+  - 放量
+  - 反包
+  preferred_regime:
+  - trending_up
+description: 'A-share strong-trend pullback rebound (builtin, data-restricted).
+
+  Core logic:
+
+  1. 20-day relative strength edge (degrades to own 20-day return when no
+  benchmark context is available).
+
+  2. MA5 above MA10 (bullish alignment).
+
+  3. Price near but above MA20 after a pullback toward MA10.
+
+  4. Volume >= 1.5x the 5-day average.
+
+  5. Negative-news proxy below 0.4 (computed from daily bars when no news feed).
+
+  Entry: next open.
+
+  Stop loss: 4% below entry.
+
+  Take profit: 2.0x risk-reward.
+
+  '
+universe:
+  market:
+  - a_share_main
+entry:
+  logic: and
+  conditions:
+  - indicator: relative_strength_20d
+    op: '>'
+    value: 0.08
+  - indicator: ma5_above_ma10
+    op: ==
+    value: true
+  - indicator: close_to_ma10_pct
+    op: <=
+    value: 0.015
+  - indicator: close_above_ma20
+    op: ==
+    value: true
+  - indicator: volume_ratio_1d_5d
+    op: '>'
+    value: 1.5
+  filters:
+  - indicator: negative_news_score
+    op: <
+    value: 0.4
+  - indicator: st_flag
+    op: ==
+    value: false
+exit:
+  stop_loss:
+    type: pct
+    value: 0.04
+  take_profit:
+    type: rr
+    value: 2.0
+  max_holding_days: 10
+params:
+  tunable:
+  - target: entry.conditions[indicator=relative_strength_20d].value
+    range:
+    - 0.05
+    - 0.2
+    step: 0.01
+    label: 相对强度阈值
+  - target: entry.conditions[indicator=relative_strength_20d].indicator
+    range:
+    - 10
+    - 60
+    step: 5
+    label: 相对强度观察周期
+  - target: entry.conditions[indicator=volume_ratio_1d_5d].value
+    range:
+    - 1.2
+    - 2.5
+    step: 0.1
+    label: 量比阈值
+  - target: entry.conditions[indicator=volume_ratio_1d_5d].indicator
+    range:
+    - 3
+    - 20
+    step: 1
+    label: 量比基准窗口
+  - target: exit.stop_loss.value
+    range:
+    - 0.02
+    - 0.08
+    step: 0.01
+    label: 止损比例
+  - target: exit.take_profit.value
+    range:
+    - 1.5
+    - 3.0
+    step: 0.5
+    label: 止盈倍数

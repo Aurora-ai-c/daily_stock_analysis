@@ -927,6 +927,13 @@ class NotificationService(
             "",
         ])
 
+        # 策略信号章节（默认关闭，STRATEGY_SIGNALS_ENABLED 开启）
+        from src.alphaevo_bridge import render_strategy_signal_section
+
+        signal_section = render_strategy_signal_section(results)
+        if signal_section is not None:
+            report_lines.extend([signal_section, "", "---", ""])
+
         # Issue #262: summary_only 时仅输出摘要，跳过个股详情
         if self._report_summary_only:
             report_lines.extend([f"## 📊 {labels['summary_heading']}", ""])

@@ -1,0 +1,128 @@
+api_version: 1
+warmup_days: 120
+meta:
+  id: ma_crossover_v1
+  family: ma_crossover
+  name: Moving Average Crossover
+  version: 1
+  parent_id: null
+  created_at: '2026-08-13'
+  market: a_share
+  category: trend
+  tags:
+  - trend
+  - moving-average
+  - crossover
+  - momentum
+  preferred_regime:
+  - trending_up
+description: 'A-share adaptation of the builtin MA crossover.
+
+  Core logic:
+
+  1. 5-day MA crosses above or is already above the 10-day MA.
+
+  2. Price closes above the 20-day MA.
+
+  3. Volume is at least 1.2x the 5-day average.
+
+  4. RSI(14) below 70 to avoid overbought chasing.
+
+  Entry: next open after conditions are met.
+
+  Stop loss: 4% below entry.
+
+  Take profit: 3.0x risk-reward.
+
+  '
+universe:
+  market:
+  - a_share_main
+entry:
+  logic: and
+  conditions:
+  - indicator: ma5_ge_ma10_or_crossing
+    op: ==
+    value: true
+  - indicator: close_above_ma20
+    op: ==
+    value: true
+  - indicator: volume_ratio_1d_5d
+    op: '>='
+    value: 1.2
+  - indicator: rsi_14
+    op: <
+    value: 70
+  filters:
+  - indicator: has_stop_signal
+    op: ==
+    value: false
+  - indicator: st_flag
+    op: ==
+    value: false
+  execution:
+    timing: next_open
+exit:
+  stop_loss:
+    type: pct
+    value: 0.04
+  take_profit:
+    type: rr
+    value: 3.0
+  max_holding_days: 15
+params:
+  tunable:
+  - target: entry.conditions[indicator=volume_ratio_1d_5d].value
+    range:
+    - 1.0
+    - 2.0
+    step: 0.1
+    label: Volume ratio threshold
+  - target: entry.conditions[indicator=ma5_ge_ma10_or_crossing].indicator.fast
+    range:
+    - 3
+    - 8
+    step: 1
+    label: Fast crossover MA
+  - target: entry.conditions[indicator=ma5_ge_ma10_or_crossing].indicator.slow
+    range:
+    - 9
+    - 20
+    step: 1
+    label: Slow crossover MA
+  - target: entry.conditions[indicator=close_above_ma20].indicator
+    range:
+    - 10
+    - 60
+    step: 5
+    label: Trend filter MA period
+  - target: entry.conditions[indicator=rsi_14].value
+    range:
+    - 60
+    - 80
+    step: 5
+    label: RSI overbought filter
+  - target: entry.conditions[indicator=rsi_14].indicator
+    range:
+    - 7
+    - 21
+    step: 1
+    label: RSI lookback period
+  - target: exit.stop_loss.value
+    range:
+    - 0.02
+    - 0.06
+    step: 0.01
+    label: Stop loss percentage
+  - target: exit.take_profit.value
+    range:
+    - 0.8
+    - 4.0
+    step: 0.2
+    label: Risk-reward ratio
+  - target: exit.max_holding_days
+    range:
+    - 5
+    - 30
+    step: 5
+    label: Max holding days

@@ -1,0 +1,91 @@
+# DISABLED for v1 — event-driven strategy requires a news/event feed.
+#
+# Without event context the probe resolves days_since_event to the
+# "no event" sentinel and the strategy can NEVER fire (days_since_event <= 3
+# is unsatisfiable), so enabling it would add noise, not signal.
+#
+# Re-enable when a news/event data source is wired into the probe:
+#   1. Remove `disabled: true` below (or add the id back to
+#      config.yaml.enabled_strategies).
+#   2. Provide event context via IndicatorContext
+#      (news_sentiment_score / days_since_event / pre_event_close).
+#   3. Keep st_flag / sector filters.
+disabled: true
+disable_reason: needs_news_event_feed
+api_version: 1
+warmup_days: 90
+meta:
+  id: event_driven_breakout_v1
+  family: event_driven
+  name: 事件驱动突破
+  version: 1
+  parent_id: null
+  created_at: '2026-08-13'
+  market: a_share
+  category: event
+  tags:
+  - 事件驱动
+  - 新闻
+  - 政策
+  - 突破
+  preferred_regime:
+  - trending_up
+  - volatile
+  experimental: true
+description: '事件催化期策略。需要新闻/事件数据源；v1 禁用。'
+universe:
+  market:
+  - a_share_main
+entry:
+  logic: and
+  conditions:
+  - indicator: news_sentiment_score
+    op: '>'
+    value: 0.7
+  - indicator: days_since_event
+    op: <=
+    value: 3
+  - indicator: volume_ratio_1d_5d
+    op: '>'
+    value: 2.0
+  - indicator: price_above_pre_event
+    op: ==
+    value: true
+  filters:
+  - indicator: sector_fund_flow_positive
+    op: ==
+    value: true
+  - indicator: already_overreacted
+    op: ==
+    value: false
+  - indicator: st_flag
+    op: ==
+    value: false
+exit:
+  stop_loss:
+    type: price_level
+    reference: pre_event_close
+  take_profit:
+    type: rr
+    value: 2.0
+  max_holding_days: 5
+params:
+  tunable:
+  - target: entry.conditions[indicator=news_sentiment_score].value
+    range:
+    - 0.5
+    - 0.9
+    step: 0.05
+    label: 新闻情绪阈值
+  - target: entry.conditions[indicator=volume_ratio_1d_5d].value
+    range:
+    - 1.5
+    - 3.0
+    step: 0.25
+    label: 量比阈值
+  - target: exit.take_profit.value
+    range:
+    - 1.5
+    - 3.0
+    step: 0.5
+    label: 止盈倍数

@@ -1,0 +1,123 @@
+api_version: 1
+warmup_days: 90
+meta:
+  id: rsi_reversion_v1
+  family: rsi_reversion
+  name: RSI Oversold Reversal
+  version: 1
+  parent_id: null
+  created_at: '2026-08-13'
+  market: a_share
+  category: reversal
+  tags:
+  - oversold
+  - reversal
+  - mean-reversion
+  - RSI
+  preferred_regime:
+  - volatile
+  - range_bound
+description: 'A-share adaptation of the builtin RSI oversold reversal.
+
+  Core logic:
+
+  1. RSI(14) below 30.
+
+  2. Price within 6% of the 20-day MA support.
+
+  3. Volume > 1.3x the 5-day average.
+
+  4. Stop-signal candle (hammer / doji / stabilization) confirms exhaustion.
+
+  Entry: next open after conditions are met.
+
+  Stop loss: 5% below entry.
+
+  Take profit: 2.0x risk-reward.
+
+  '
+universe:
+  market:
+  - a_share_main
+entry:
+  logic: and
+  conditions:
+  - indicator: rsi_14
+    op: <
+    value: 30
+  - indicator: close_to_ma20_pct
+    op: <=
+    value: 0.06
+  - indicator: volume_ratio_1d_5d
+    op: '>'
+    value: 1.3
+  - indicator: has_stop_signal
+    op: ==
+    value: true
+  filters:
+  - indicator: close_below_ma10
+    op: ==
+    value: true
+  - indicator: st_flag
+    op: ==
+    value: false
+  execution:
+    timing: next_open
+exit:
+  stop_loss:
+    type: pct
+    value: 0.05
+  take_profit:
+    type: rr
+    value: 2.0
+  max_holding_days: 10
+params:
+  tunable:
+  - target: entry.conditions[indicator=rsi_14].value
+    range:
+    - 20
+    - 35
+    step: 1
+    label: RSI oversold threshold
+  - target: entry.conditions[indicator=rsi_14].indicator
+    range:
+    - 7
+    - 21
+    step: 1
+    label: RSI lookback period
+  - target: entry.conditions[indicator=close_to_ma20_pct].value
+    range:
+    - 0.02
+    - 0.08
+    step: 0.01
+    label: MA20 deviation threshold
+  - target: entry.conditions[indicator=volume_ratio_1d_5d].value
+    range:
+    - 1.1
+    - 2.0
+    step: 0.1
+    label: Volume ratio threshold
+  - target: entry.conditions[indicator=volume_ratio_1d_5d].indicator
+    range:
+    - 3
+    - 20
+    step: 1
+    label: Volume ratio baseline window
+  - target: exit.stop_loss.value
+    range:
+    - 0.03
+    - 0.08
+    step: 0.01
+    label: Stop loss percentage
+  - target: exit.take_profit.value
+    range:
+    - 0.8
+    - 3.0
+    step: 0.2
+    label: Risk-reward ratio
+  - target: exit.max_holding_days
+    range:
+    - 3
+    - 20
+    step: 1
+    label: Max holding days

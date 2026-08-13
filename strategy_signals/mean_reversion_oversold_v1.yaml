@@ -1,0 +1,110 @@
+api_version: 1
+warmup_days: 90
+meta:
+  id: mean_reversion_oversold_v1
+  family: mean_reversion_oversold
+  name: 超跌反弹确认
+  version: 1
+  parent_id: null
+  created_at: '2026-08-13'
+  market: a_share
+  category: reversal
+  tags:
+  - 超跌
+  - 反弹
+  - 均值回归
+  preferred_regime:
+  - ranging
+  - trending_down
+description: 'A-share oversold rebound confirmation (builtin, data-restricted).
+
+  Core logic:
+
+  1. RSI(14) < 30 or deviation from 20-day MA > 8%.
+
+  2. Stop-signal candle (long lower shadow / bullish engulfing).
+
+  3. Volume shrinking then rising.
+
+  Sector-risk and ST filters degrade conservatively when no sector context is
+  available (sector_risk_flag=False keeps the signal alive; ST exclusion is
+  enforced by the probe via stock_info.is_st).
+
+  Entry: next open after confirmation.
+
+  Stop loss: 3% trailing from low.
+
+  Take profit: regress to MA20.
+
+  '
+universe:
+  market:
+  - a_share_main
+entry:
+  logic: and
+  conditions:
+  - indicator: rsi_14
+    op: <
+    value: 30
+  - indicator: deviation_from_ma20_pct
+    op: '>'
+    value: 0.08
+  - indicator: has_stop_signal
+    op: ==
+    value: true
+  - indicator: volume_shrink_then_rise
+    op: ==
+    value: true
+  filters:
+  - indicator: sector_risk_flag
+    op: ==
+    value: false
+  - indicator: st_flag
+    op: ==
+    value: false
+exit:
+  stop_loss:
+    type: pct_from_low
+    value: 0.03
+  take_profit:
+    type: target_ma
+    target: ma20
+  max_holding_days: 8
+params:
+  tunable:
+  - target: entry.conditions[indicator=rsi_14].value
+    range:
+    - 20
+    - 35
+    step: 1
+    label: RSI超跌阈值
+  - target: entry.conditions[indicator=rsi_14].indicator
+    range:
+    - 7
+    - 21
+    step: 1
+    label: RSI观察周期
+  - target: entry.conditions[indicator=deviation_from_ma20_pct].value
+    range:
+    - 0.05
+    - 0.15
+    step: 0.01
+    label: 偏离度阈值
+  - target: entry.conditions[indicator=deviation_from_ma20_pct].indicator
+    range:
+    - 10
+    - 40
+    step: 5
+    label: 均线偏离观察周期
+  - target: exit.stop_loss.value
+    range:
+    - 0.02
+    - 0.06
+    step: 0.01
+    label: 止损比例
+  - target: exit.take_profit.target
+    range:
+    - 10
+    - 40
+    step: 5
+    label: 止盈均线周期

@@ -1,0 +1,43 @@
+# Strategy Signal Probe configuration
+#
+# Controls the deterministic daily strategy-signal chapter injected into the
+# DSA report (see src/strategy_signal_probe.py). Strategy YAML files in this
+# directory follow the alphaevo DSL (api_version 1) and are evaluated on the
+# last available daily bar per watchlist symbol.
+#
+# Semantics:
+#   - Each enabled strategy produces exactly one signal per symbol ("would this
+#     strategy enter today?").  No signal == flat, and the report says why
+#     (limit-up block, suspension, regime, insufficient warmup, conditions).
+#   - Signals from strategies in the same vote_group are aggregated under a
+#     single guardrails label (🟢/🟡/🔴 level derived from vote share), so the
+#     report never floods the reader with 5 near-identical opinions.
+#   - tie_rule=conservative: tied votes resolve to the LOWER signal level.
+#   - Empty vote groups abstain (no label emitted for that group).
+
+api_version: 1
+
+enabled_strategies:
+  - ma_crossover_v1
+  - rsi_reversion_v1
+  - mean_reversion_oversold_v1
+  - trend_pullback_rebound_v1
+  - volatility_compression_breakout_v1
+
+# Strategy file -> vote group. Two or more strategies can share a group;
+# each group contributes at most one aggregated signal per symbol.
+vote_groups:
+  trend: [ma_crossover_v1, trend_pullback_rebound_v1, volatility_compression_breakout_v1]
+  reversal: [rsi_reversion_v1, mean_reversion_oversold_v1]
+
+tie_rule: conservative          # conservative | optimistic
+disagreement_mode: show_all     # show_all | majority_only
+
+# Probe execution guardrails
+timeout_seconds: 1200
+max_concurrency: 4
+min_data_days: 30
+
+# Symbols are taken from the active watchlist (STOCK_LIST) at run time.
+# Optional override for probe-only testing:
+# watchlist_override: ["600519", "300750", "002594"]
