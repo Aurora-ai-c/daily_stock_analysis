@@ -32,7 +32,8 @@ class GitHubApi:
             print(f"[dry-run] {method} {path} {kw.get('json', '')}")
             return requests.Response()
         resp = self.session.request(method, f"{API_BASE}{path}", timeout=30, **kw)
-        resp.raise_for_status()
+        if resp.status_code != 422:
+            resp.raise_for_status()
         return resp
 
 

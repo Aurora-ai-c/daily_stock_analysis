@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
@@ -70,6 +71,16 @@ class TestGenerateRepo:
         with mock.patch.object(api, "request", return_value=FakeResponse(200)) as req:
             assert deploy_user.generate_repo(api, "tpl-owner", "tpl-repo", "alice", "dsa-cloud-alice", dry_run=True) == "created"
         req.assert_not_called()
+
+    def test_real_422_via_session_is_idempotent(self):
+        api = _mk_api()
+        resp = requests.Response()
+        resp.status_code = 422
+        resp._content = b'{"message": "Repository creation failed."}'
+        resp.headers["Content-Type"] = "application/json"
+        with mock.patch.object(api.session, "request", return_value=resp) as sess_req:
+            assert deploy_user.generate_repo(api, "tpl-owner", "tpl-repo", "alice", "dsa-cloud-alice", dry_run=False) == "exists"
+        sess_req.assert_called_once()
 
 
 class TestEnableActions:
