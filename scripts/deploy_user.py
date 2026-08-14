@@ -81,6 +81,66 @@ def enable_actions(api: GitHubApi, owner: str, repo_name: str, dry_run: bool) ->
     print(f"✅ Actions 已启用 {owner}/{repo_name}")
 
 
+def list_secrets(api: GitHubApi, owner: str, repo: str) -> set[str]:
+    resp = api.request("GET", f"/repos/{owner}/{repo}/actions/secrets")
+    if api.dry_run:
+        return set()
+    return {item["name"] for item in resp.json().get("secrets", [])}
+
+
+def _put_secret(api: GitHubApi, owner: str, repo: str, name: str, value: str) -> None:
+    key_resp = api.request("GET", f"/repos/{owner}/{repo}/actions/secrets/public-key")
+    if not isinstance(key_resp, requests.Response):
+        api.request("PUT", f"/repos/{owner}/{repo}/actions/secrets/{name}",
+                    json={"name": name, "value": value})
+        return
+    pubkey = key_resp.json()
+    import base64
+
+    from nacl import encoding, public
+    seal = public.SealedBox(public.PublicKey(pubkey["key"], encoding.Base64Encoder()))
+    encrypted = seal.encrypt(value.encode("utf-8"))
+    api.request(
+        "PUT", f"/repos/{owner}/{repo}/actions/secrets/{name}",
+        json={"encrypted_value": base64.b64encode(encrypted).decode("ascii"),
+              "key_id": pubkey["key_id"]},
+    )
+
+
+def write_secrets(api: GitHubApi, owner: str, repo: str,
+                  secrets: dict[str, str], overwrite: bool, dry_run: bool) -> list[str]:
+    existing = set() if overwrite else list_secrets(api, owner, repo)
+    written: list[str] = []
+    for name, value in secrets.items():
+        if name in existing and not overwrite:
+            print(f"⏭️ secret {name} 已存在,跳过(--overwrite-secrets 强制覆盖)")
+            continue
+        if dry_run:
+            print(f"[dry-run] PUT /repos/{owner}/{repo}/actions/secrets/{name}")
+        else:
+            _put_secret(api, owner, repo, name, value)
+        written.append(name)
+    return written
+
+
+def set_variable(api: GitHubApi, owner: str, repo: str, name: str, value: str, dry_run: bool) -> None:
+    if dry_run:
+        print(f"[dry-run] PATCH /repos/{owner}/{repo}/actions/variables/{name} = {value}")
+        return
+    api.request("PATCH", f"/repos/{owner}/{repo}/actions/variables/{name}",
+                json={"name": name, "value": value})
+    print(f"✅ 变量 {name} 已设置")
+
+
+def write_usage_guide(args: argparse.Namespace, repo: str) -> None:
+    print("\n========== 使用指引 ==========")
+    print(f"1. 让用户创建 PAT(权限: repo + workflow):")
+    print("   https://github.com/settings/tokens/new?scopes=repo,workflow")
+    print(f"2. 打开 exe 客户端,输入用户名 {args.owner} 与仓库名 {repo} 粘贴 PAT 登录")
+    print(f"3. 仓库地址: https://github.com/{args.owner}/{repo}")
+    print("===============================")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="DSA 云端客户端 - 单用户部署")
     parser.add_argument("--template-owner", required=True)
@@ -92,6 +152,9 @@ def main(argv=None) -> int:
     parser.add_argument("--no-dry-run", action="store_true", help="实际执行")
     parser.add_argument("--overwrite-secrets", action="store_true", help="覆盖已有 secrets(默认 merge)")
     parser.add_argument("--heartbeat-test", action="store_true", help="部署后触发最小运行验证 heartbeat")
+    parser.add_argument("--llm-key", default=None, help="LLM API Key(写入 LLM_PRIMARY_API_KEY secret)")
+    parser.add_argument("--notify-webhook", default=None, help="通知 webhook(写入 CUSTOM_WEBHOOK_URLS secret)")
+    parser.add_argument("--stock-list", default=None, help="默认自选股(写入 STOCK_LIST 变量)")
     args = parser.parse_args(argv)
 
     if args.dry_run and args.no_dry_run:
@@ -110,6 +173,15 @@ def main(argv=None) -> int:
     check_template(api, args.template_owner, args.template_repo)
     generate_repo(api, args.template_owner, args.template_repo, args.owner, repo, dry_run)
     enable_actions(api, args.owner, repo, dry_run)
+
+    secrets_map: dict[str, str] = {}
+    if args.llm_key:
+        secrets_map["LLM_PRIMARY_API_KEY"] = args.llm_key
+    if args.notify_webhook:
+        secrets_map["CUSTOM_WEBHOOK_URLS"] = args.notify_webhook
+    write_secrets(api, args.owner, repo, secrets_map, args.overwrite_secrets, dry_run)
+    set_variable(api, args.owner, repo, "STOCK_LIST", args.stock_list or "600519", dry_run)
+    write_usage_guide(args, repo)
     return 0
 
 

@@ -92,3 +92,72 @@ class TestEnableActions:
             "PUT", "/repos/alice/dsa-cloud-alice/actions/permissions",
             json={"enabled": True},
         )
+
+
+class TestWriteSecrets:
+    def _api(self):
+        return _mk_api()
+
+    def test_merge_skips_existing(self):
+        api = self._api()
+        # 调用序列:GET secrets(发现 LLM_API_KEY 已存在) → GET public-key → PUT WEBHOOK_URL
+        api.request = mock.Mock(side_effect=[
+            FakeResponse(200, {"secrets": [{"name": "LLM_API_KEY"}]}),
+            FakeResponse(200, {"key": "k", "key_id": "1"}),
+            FakeResponse(201),
+        ])
+        written = deploy_user.write_secrets(api, "alice", "dsa-cloud-alice",
+                                            {"LLM_API_KEY": "new", "WEBHOOK_URL": "https://x"}, overwrite=False, dry_run=False)
+        assert written == ["WEBHOOK_URL"]
+        puts = [c.args[1] for c in api.request.call_args_list if c.args[0] == "PUT"]
+        assert puts == ["/repos/alice/dsa-cloud-alice/actions/secrets/WEBHOOK_URL"]
+
+    def test_overwrite_writes_all(self):
+        api = self._api()
+        with mock.patch.object(api, "request", side_effect=[
+            FakeResponse(200, {"key": "k", "key_id": "1"}),
+            FakeResponse(201),
+            FakeResponse(200, {"key": "k", "key_id": "1"}),
+            FakeResponse(201),
+        ]) as req:
+            written = deploy_user.write_secrets(api, "alice", "dsa-cloud-alice",
+                                                {"LLM_API_KEY": "new", "WEBHOOK_URL": "u"}, overwrite=True, dry_run=False)
+        assert sorted(written) == ["LLM_API_KEY", "WEBHOOK_URL"]
+        puts = [c.args[0] for c in req.call_args_list if c.args[0] == "PUT"]
+        assert len(puts) == 2
+
+    def test_real_encryption_via_session(self):
+        import base64
+        api = self._api()
+        pubkey_b64 = base64.b64encode(bytes(range(32))).decode("ascii")
+
+        def _resp(status, body):
+            r = requests.Response()
+            r.status_code = status
+            r._content = body
+            r.headers["Content-Type"] = "application/json"
+            return r
+
+        with mock.patch.object(api.session, "request", side_effect=[
+            _resp(200, b'{"secrets": []}'),
+            _resp(200, ('{"key": "%s", "key_id": "1"}' % pubkey_b64).encode("ascii")),
+            _resp(204, b"{}"),
+        ]) as sess_req:
+            written = deploy_user.write_secrets(api, "alice", "dsa-cloud-alice",
+                                                {"WEBHOOK_URL": "u"}, overwrite=False, dry_run=False)
+        assert written == ["WEBHOOK_URL"]
+        put_call = [c for c in sess_req.call_args_list if c.args[0] == "PUT"][0]
+        payload = put_call.kwargs["json"]
+        assert payload["key_id"] == "1"
+        assert payload["encrypted_value"]
+
+
+class TestSetVariable:
+    def test_patch_variable(self):
+        api = _mk_api()
+        with mock.patch.object(api, "request", return_value=FakeResponse(201)) as req:
+            deploy_user.set_variable(api, "alice", "dsa-cloud-alice", "STOCK_LIST", "600519,600036", dry_run=False)
+        req.assert_called_once_with(
+            "PATCH", "/repos/alice/dsa-cloud-alice/actions/variables/STOCK_LIST",
+            json={"name": "STOCK_LIST", "value": "600519,600036"},
+        )
