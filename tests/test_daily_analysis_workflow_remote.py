@@ -23,8 +23,13 @@ def _analyze_job(wf: dict) -> dict:
     return wf["jobs"]["analyze"]
 
 
+def _on(wf: dict) -> dict:
+    """yaml 1.1 会把顶层 `on:` 解析为布尔键 True;两种可能都兜住。"""
+    return wf.get("on") or wf.get(True) or {}
+
+
 def test_dispatch_has_stock_list_input():
-    inputs = _load_workflow()["on"]["workflow_dispatch"]["inputs"]
+    inputs = _on(_load_workflow())["workflow_dispatch"]["inputs"]
     assert "stock_list" in inputs, "dispatch 需要 stock_list 输入(客户端触发时覆盖自选股)"
     assert inputs["stock_list"]["type"] == "string"
     assert inputs["stock_list"]["required"] is False
