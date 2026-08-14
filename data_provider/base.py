@@ -2240,7 +2240,7 @@ class DataFetcherManager:
         避免全市场列表（含指数/退市股）污染采样。
         """
         import os
-        from services.stock_list_parser import split_stock_list
+        from src.services.stock_list_parser import split_stock_list
 
         raw = os.getenv("STOCK_LIST") or ""
         codes = split_stock_list(raw)
