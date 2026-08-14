@@ -15,6 +15,7 @@
 """
 
 import logging
+import os
 import random
 import time
 from threading import BoundedSemaphore, RLock, Thread
@@ -2231,6 +2232,30 @@ class DataFetcherManager:
 
         logger.warning(f"[筹码分布] {stock_code} 所有数据源均失败")
         return None
+
+    def get_stock_list(self) -> List[Dict[str, Any]]:
+        """返回自选股列表（来自 STOCK_LIST / .env 配置）。
+
+        供外部系统（如 alphaevo 适配器）获取本次分析的自选股池，
+        避免全市场列表（含指数/退市股）污染采样。
+        """
+        import os
+        from services.stock_list_parser import split_stock_list
+
+        raw = os.getenv("STOCK_LIST") or ""
+        codes = split_stock_list(raw)
+        result: List[Dict[str, Any]] = []
+        for code in codes:
+            name = self.get_stock_name(code, allow_realtime=False)
+            result.append(
+                {
+                    "code": code,
+                    "name": name or code,
+                    "symbol": code,
+                    "market": "A_SHARE",
+                }
+            )
+        return result
 
     def get_stock_name(self, stock_code: str, allow_realtime: bool = True) -> Optional[str]:
         """
