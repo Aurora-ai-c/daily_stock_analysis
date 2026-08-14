@@ -89,3 +89,6 @@ static/
 /apps/dsa-desktop/node_modules/
 /node_modules/
 docs/specs/
+
+# 心跳续命:meta/heartbeat 分支 push 专用 worktree(本地残留时禁止误提交)
+/.heartbeat-wt
