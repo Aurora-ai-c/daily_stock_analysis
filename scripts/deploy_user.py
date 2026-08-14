@@ -141,6 +141,49 @@ def write_usage_guide(args: argparse.Namespace, repo: str) -> None:
     print("===============================")
 
 
+def heartbeat_test(api: GitHubApi, owner: str, repo: str, dry_run: bool) -> None:
+    if dry_run:
+        print(f"[dry-run] POST .../workflows/00-daily-analysis.yml/dispatches mode=stocks-only")
+        return
+    api.request(
+        "POST", f"/repos/{owner}/{repo}/actions/workflows/00-daily-analysis.yml/dispatches",
+        json={"ref": "main", "inputs": {"mode": "stocks-only"}},
+    )
+    print("✅ 已触发验证运行(mode=stocks-only)。")
+    print(f"   完成后检查 https://github.com/{owner}/{repo}/tree/meta/heartbeat")
+
+
+class DeployArgs:
+    def __init__(self, template_owner: str, template_repo: str, owner: str, repo: str,
+                 llm_key=None, notify_webhook=None, stock_list=None,
+                 overwrite_secrets=False, heartbeat_test=False):
+        self.template_owner = template_owner
+        self.template_repo = template_repo
+        self.owner = owner
+        self.repo = repo
+        self.llm_key = llm_key
+        self.notify_webhook = notify_webhook
+        self.stock_list = stock_list
+        self.overwrite_secrets = overwrite_secrets
+        self.heartbeat_test = heartbeat_test
+
+
+def run_deploy(api: GitHubApi, args: "DeployArgs") -> None:
+    check_template(api, args.template_owner, args.template_repo)
+    generate_repo(api, args.template_owner, args.template_repo, args.owner, args.repo, api.dry_run)
+    enable_actions(api, args.owner, args.repo, api.dry_run)
+    secrets_map: dict[str, str] = {}
+    if args.llm_key:
+        secrets_map["LLM_PRIMARY_API_KEY"] = args.llm_key
+    if args.notify_webhook:
+        secrets_map["CUSTOM_WEBHOOK_URLS"] = args.notify_webhook
+    write_secrets(api, args.owner, args.repo, secrets_map, args.overwrite_secrets, api.dry_run)
+    set_variable(api, args.owner, args.repo, "STOCK_LIST", args.stock_list or "600519", api.dry_run)
+    if args.heartbeat_test:
+        heartbeat_test(api, args.owner, args.repo, api.dry_run)
+    write_usage_guide(args, args.repo)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="DSA 云端客户端 - 单用户部署")
     parser.add_argument("--template-owner", required=True)
@@ -170,18 +213,13 @@ def main(argv=None) -> int:
     api.dry_run = dry_run
     repo = args.repo or resolve_repo_name(args.owner)
 
-    check_template(api, args.template_owner, args.template_repo)
-    generate_repo(api, args.template_owner, args.template_repo, args.owner, repo, dry_run)
-    enable_actions(api, args.owner, repo, dry_run)
-
-    secrets_map: dict[str, str] = {}
-    if args.llm_key:
-        secrets_map["LLM_PRIMARY_API_KEY"] = args.llm_key
-    if args.notify_webhook:
-        secrets_map["CUSTOM_WEBHOOK_URLS"] = args.notify_webhook
-    write_secrets(api, args.owner, repo, secrets_map, args.overwrite_secrets, dry_run)
-    set_variable(api, args.owner, repo, "STOCK_LIST", args.stock_list or "600519", dry_run)
-    write_usage_guide(args, repo)
+    run_deploy(api, DeployArgs(
+        template_owner=args.template_owner, template_repo=args.template_repo,
+        owner=args.owner, repo=repo,
+        llm_key=args.llm_key, notify_webhook=args.notify_webhook,
+        stock_list=args.stock_list,
+        overwrite_secrets=args.overwrite_secrets, heartbeat_test=args.heartbeat_test,
+    ))
     return 0
 
 

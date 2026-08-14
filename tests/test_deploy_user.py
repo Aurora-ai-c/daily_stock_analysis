@@ -161,3 +161,39 @@ class TestSetVariable:
             "PATCH", "/repos/alice/dsa-cloud-alice/actions/variables/STOCK_LIST",
             json={"name": "STOCK_LIST", "value": "600519,600036"},
         )
+
+
+class TestHeartbeatTest:
+    def test_dispatches_workflow(self):
+        api = _mk_api()
+        with mock.patch.object(api, "request", return_value=FakeResponse(204)) as req:
+            deploy_user.heartbeat_test(api, "alice", "dsa-cloud-alice", dry_run=False)
+        req.assert_called_once_with(
+            "POST", "/repos/alice/dsa-cloud-alice/actions/workflows/00-daily-analysis.yml/dispatches",
+            json={"ref": "main", "inputs": {"mode": "stocks-only"}},
+        )
+
+
+class TestRunDeploy:
+    def test_full_flow_calls_in_order(self):
+        api = _mk_api()
+        api.dry_run = False
+        calls = []
+
+        def _fake_request(method, path, **kw):
+            calls.append((method, path))
+            if method == "GET" and path.startswith("/repos/tpl/"):
+                return FakeResponse(200, {"is_template": True, "private": True, "permissions": {"pull": True}})
+            return FakeResponse(200, {"secrets": []})
+
+        api.request = mock.Mock(side_effect=_fake_request)
+        deploy_user.run_deploy(api, deploy_user.DeployArgs(
+            template_owner="tpl", template_repo="tplr", owner="alice",
+            repo="dsa-cloud-alice", llm_key=None, notify_webhook=None,
+            stock_list=None, overwrite_secrets=False, heartbeat_test=False,
+        ))
+        methods = [m for m, _ in calls]
+        assert methods[0] == "GET"          # check_template
+        assert methods[1] == "POST"         # generate
+        assert methods[2] == "PUT"          # enable actions
+        assert "PATCH" in methods           # STOCK_LIST 变量
