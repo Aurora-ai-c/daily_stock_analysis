@@ -21,7 +21,7 @@
 
 ---
 
-### Task A1: 远程控制契约测试(先写,失败)
+### Task 1: 远程控制契约测试(先写,失败)
 
 **Files:**
 - Create: `tests/test_daily_analysis_workflow_remote.py`
@@ -123,7 +123,7 @@ git commit -m "test: contract tests for remote control workflow changes (red)"
 
 ---
 
-### Task A2: 修改 workflow 满足契约
+### Task 2: 修改 workflow 满足契约
 
 **Files:**
 - Modify: `.github/workflows/00-daily-analysis.yml`
@@ -215,10 +215,9 @@ git commit -m "test: contract tests for remote control workflow changes (red)"
           if git -C .heartbeat-wt diff --cached --quiet; then
             echo "✅ heartbeat 无变更，跳过提交"
           else
-            git -C .heartbeat-wt commit -m "heartbeat: run ${RUN_NUMBER} ${JOB_STATUS} $(date +%Y-%m-%d)"
-            git push origin "HEAD:${HEARTBEAT_BRANCH}" || echo "⚠️ heartbeat push 失败（不阻塞主流程）"
-          fi
-          git -C .heartbeat-wt worktree remove --force .heartbeat-wt 2>/dev/null || rm -rf .heartbeat-wt
+          git -C .heartbeat-wt commit -m "heartbeat: run ${RUN_NUMBER} ${JOB_STATUS} $(date +%Y-%m-%d)"
+          git push origin "HEAD:${HEARTBEAT_BRANCH}" || echo "⚠️ heartbeat push 失败（不阻塞主流程）"
+          git worktree remove --force .heartbeat-wt 2>/dev/null || rm -rf .heartbeat-wt
 ```
 
 - [ ] **Step 5: 运行契约测试确认转绿**
@@ -240,7 +239,7 @@ git commit -m "feat(workflow): dispatch stock_list override + heartbeat renew vi
 
 ---
 
-### Task A3: 自触发防护契约测试 + .gitignore
+### Task 3: 自触发防护契约测试 + .gitignore
 
 **Files:**
 - Create: `tests/test_heartbeat_self_trigger_guard.py`
