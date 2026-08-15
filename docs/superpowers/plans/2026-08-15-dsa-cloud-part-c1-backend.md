@@ -522,9 +522,10 @@ git commit -m "feat(client): github client with 429 backoff and repo/actions ops
   - `SIGNAL_FIELDS = ("symbol", "as_of_date", "strategy", "action", "entry_price", "stop_loss", "target_price", "confidence", "supports", "conflicts")`
   - `class SignalCard`:含上述字段(dataclass,缺省 None);`to_dict()`
   - `def parse_signal(record: dict) -> SignalCard`:宽容取字段
-  - `def extract_cards(aggregate: dict) -> list[SignalCard]`:兼容两种输入——
+  - `def extract_cards(aggregate: dict) -> list[SignalCard]`:兼容三种输入——
     1. 顶层是 `{"signals": [...]}` / 纯 list
     2. `{"per_symbol": {code: {...}}}` 或 `{code: {...}}` 扁平 symbol 键
+    3. 真实产物形状(探针 `aggregate()` 输出):`{"as_of_date": ..., "symbols": {code: {"as_of_date": ..., "groups": {group: {"signals": {sid: {...}}}}}}}`——父键 code 注入 `symbol`、`strategy` 取 sid、`as_of_date` 缺省回退顶层、组内 signals 为空则整组跳过;producer 无 action/stop_loss/target_price/confidence/supports/conflicts 字段,这些保持 None
 
 - [ ] **Step 1: 写失败测试**
 
