@@ -36,3 +36,39 @@ def test_extract_from_per_symbol():
     aggregate = {"per_symbol": {"600519": {"symbol": "600519", "confidence": 0.5}}}
     cards = sig.extract_cards(aggregate)
     assert cards[0].symbol == "600519"
+
+
+def test_extract_from_signals_wrapped_list():
+    aggregate = {"signals": [
+        {"symbol": "600519", "action": "buy"},
+        {"symbol": "000001", "action": "sell"},
+    ]}
+    cards = sig.extract_cards(aggregate)
+    assert [c.symbol for c in cards] == ["600519", "000001"]
+    assert [c.action for c in cards] == ["buy", "sell"]
+
+
+def test_extract_from_flat_code_dict():
+    aggregate = {"600519": {"symbol": "600519", "confidence": 0.6},
+                 "000001": {"symbol": "000001", "confidence": 0.3}}
+    cards = sig.extract_cards(aggregate)
+    assert [c.symbol for c in cards] == ["600519", "000001"]
+
+
+def test_extract_empty_and_junk_inputs():
+    assert sig.extract_cards({}) == []
+    assert sig.extract_cards("junk") == []
+    assert sig.extract_cards(None) == []
+    assert sig.extract_cards([]) == []
+
+
+def test_extract_filters_records_without_symbol():
+    aggregate = {"signals": [
+        {"action": "buy", "confidence": 0.9},  # 缺 symbol,应被过滤
+        {"symbol": "600519", "action": "buy"},
+    ]}
+    cards = sig.extract_cards(aggregate)
+    assert [c.symbol for c in cards] == ["600519"]
+    aggregate_flat = {"not-a-symbol": {"action": "buy"}, "600519": {"symbol": "600519"}}
+    cards_flat = sig.extract_cards(aggregate_flat)
+    assert [c.symbol for c in cards_flat] == ["600519"]
