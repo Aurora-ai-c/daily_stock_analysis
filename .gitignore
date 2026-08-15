@@ -84,7 +84,7 @@ verify_*.py
 !.claude/skills/**
 
 # ignore static files
-static/
+/static/
 /apps/dsa-desktop/dist/
 /apps/dsa-desktop/node_modules/
 /node_modules/
