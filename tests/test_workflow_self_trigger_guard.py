@@ -43,20 +43,41 @@ def _on(wf: dict) -> dict:
     return wf.get("on") or wf.get(True) or {}
 
 
+def _push_triggers_heartbeat(push: dict) -> bool:
+    """push 触发配置是否会响应 meta/heartbeat 分支的 push。"""
+    branches = push.get("branches")
+    branches_ignore = push.get("branches-ignore")
+    if branches is not None or branches_ignore is not None:
+        if branches_ignore is not None:
+            # branches-ignore:仅当心跳分支在忽略名单中才安全
+            return not any(_match(b, HEARTBEAT_BRANCH) for b in branches_ignore)
+        # branches 白名单:心跳分支不得命中
+        return any(_match(b, HEARTBEAT_BRANCH) for b in branches)
+    if push.get("tags"):
+        return False  # 仅 tag 触发:分支 push 不可能触发
+    return True  # 裸 push:所有分支都触发,含 meta/heartbeat
+
+
+def test_push_trigger_safe_configs_exclude_heartbeat():
+    assert _push_triggers_heartbeat({"branches": ["main"]}) is False
+    assert _push_triggers_heartbeat({"branches-ignore": ["meta/heartbeat"]}) is False
+    assert _push_triggers_heartbeat({"tags": ["v*"]}) is False
+    assert _push_triggers_heartbeat({"branches": ["main"], "tags": ["v*"]}) is False
+
+
+def test_push_trigger_unsafe_configs_flag_heartbeat():
+    assert _push_triggers_heartbeat({}) is True  # 裸 push:所有分支都触发
+    assert _push_triggers_heartbeat({"branches": ["meta/heartbeat"]}) is True
+    assert _push_triggers_heartbeat({"branches": ["**"]}) is True
+
+
 def test_no_workflow_triggered_by_heartbeat_branch_push():
     failures = []
     for name, wf in _load_all_workflows():
         push = _on(wf).get("push")
         if not push:
             continue
-        branches = push.get("branches") or []
-        branches_ignore = push.get("branches-ignore") or []
-        tags = push.get("tags") or []
-        if tags:
-            continue  # 仅 tag 触发:分支 push 不可能触发
-        hit = any(_match(b, HEARTBEAT_BRANCH) for b in branches)
-        guarded = any(_match(b, HEARTBEAT_BRANCH) for b in branches_ignore)
-        if hit and not guarded:
+        if _push_triggers_heartbeat(push):
             failures.append(name)
     assert not failures, f"以下 workflow 会响应 meta/heartbeat push,需加 branches-ignore: {failures}"
 
