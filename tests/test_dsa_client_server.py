@@ -90,3 +90,23 @@ def test_reports_list():
     client, _, _ = _make()
     reports = client.get("/api/reports?token=tok123").json()["reports"]
     assert reports[0]["name"] == "analysis-reports-5"
+
+
+def test_login_saves_config():
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as td:
+        file = Path(td) / "cfg.json"
+        from unittest import mock
+        with mock.patch.object(cfg_mod, "config_path", return_value=file):
+            client, cfgv, _ = _make()
+            r = client.post("/api/login?token=tok123", headers={"X-Origin-Token": "tok123"},
+                            json={"owner": "bob", "repo": "dsa-cloud-bob", "pat": "ghp_secret"})
+            assert r.status_code == 200
+            assert r.json()["ok"] is True
+            assert cfgv.get_pat() == "ghp_secret"
+
+
+def test_login_requires_origin_header():
+    client, _, _ = _make()
+    assert client.post("/api/login?token=tok123",
+                       json={"owner": "bob", "repo": "r", "pat": "p"}).status_code == 403

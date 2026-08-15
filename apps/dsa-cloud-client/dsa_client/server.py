@@ -27,6 +27,12 @@ class TriggerBody(BaseModel):
     stock_list: str | None = None
 
 
+class LoginBody(BaseModel):
+    owner: str
+    repo: str
+    pat: str
+
+
 def _check_token(config, token: str) -> bool:
     return token == config.token
 
@@ -104,6 +110,16 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
         if body.stock_list:
             inputs["stock_list"] = body.stock_list
         git.dispatch(config.owner, config.repo, ref="main", inputs=inputs)
+        return {"ok": True}
+
+    @app.post("/api/login")
+    def api_login(request: Request, body: LoginBody):
+        if not (_guard(request) and _check_origin(request, config)):
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+        config.owner = body.owner
+        config.repo = body.repo
+        config.set_pat(body.pat)
+        config.save()
         return {"ok": True}
 
     @app.get("/api/reports")

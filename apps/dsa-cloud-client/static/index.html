@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSA 云端客户端</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>DSA 云端客户端</h1>
+  <button id="copy-url" title="复制访问地址">复制地址</button>
+</header>
+<nav>
+  <button data-tab="login">登录</button>
+  <button data-tab="watchlist">自选股</button>
+  <button data-tab="trigger">触发</button>
+  <button data-tab="reports">报告</button>
+</nav>
+<main>
+  <section id="tab-login" class="tab">
+    <h2>登录</h2>
+    <label>GitHub 用户名 <input id="login-owner" placeholder="alice"></label>
+    <label>仓库名 <input id="login-repo" placeholder="dsa-cloud-alice"></label>
+    <label>PAT <input id="login-pat" type="password" placeholder="ghp_..."></label>
+    <button id="login-save">保存</button>
+    <p id="login-status"></p>
+  </section>
+  <section id="tab-watchlist" class="tab" hidden>
+    <h2>自选股</h2>
+    <textarea id="watchlist-input" rows="4" placeholder="逗号分隔，如 600519,600036"></textarea>
+    <button id="watchlist-save">保存</button>
+    <p id="watchlist-status"></p>
+  </section>
+  <section id="tab-trigger" class="tab" hidden>
+    <h2>触发运行</h2>
+    <label>模式
+      <select id="trigger-mode">
+        <option value="full">完整分析</option>
+        <option value="stocks-only">仅股票</option>
+        <option value="market-only">仅大盘</option>
+      </select>
+    </label>
+    <label>本次覆盖自选股(可选) <input id="trigger-stock" placeholder="留空用仓库默认"></label>
+    <button id="trigger-run">运行</button>
+    <p id="trigger-status"></p>
+  </section>
+  <section id="tab-reports" class="tab" hidden>
+    <h2>报告与信号</h2>
+    <button id="reports-refresh">刷新</button>
+    <div id="reports-list"></div>
+  </section>
+</main>
+<script src="/static/vendor/DOMPurify.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
