@@ -17,9 +17,10 @@ import dsa_client.github_client as gc  # noqa: E402
 
 
 class FakeResp:
-    def __init__(self, status=200, data=None):
+    def __init__(self, status=200, data=None, content=b""):
         self.status_code = status
         self.headers = {}
+        self.content = content
         self._data = {} if data is None else data
 
     def json(self):
@@ -73,6 +74,13 @@ class TestRepoOps:
         url = session.request.call_args.args[1]
         assert url.endswith("/actions/workflows/00-daily-analysis.yml/dispatches")
         assert session.request.call_args.kwargs["json"] == {"ref": "main", "inputs": {"mode": "stocks-only"}}
+
+
+class TestEmptyBody:
+    def test_204_empty_body_returns_none(self):
+        # GitHub 对 dispatch POST / variables PATCH 返回 204 空 body,不能抛 JSONDecodeError
+        client, session, _ = _client([FakeResp(204)])
+        assert client.request("POST", "/actions/workflows/00-daily-analysis.yml/dispatches") is None
 
 
 class TestIsRunning:

@@ -35,6 +35,8 @@ class GitHubClient:
             resp = session.request(method, f"{API_BASE}{path}", timeout=30, **kw)
             if resp.status_code != 429 and resp.status_code < 500:
                 resp.raise_for_status()
+                if not resp.content:
+                    return None
                 return resp.json()
             attempt += 1
             if attempt > MAX_RETRIES:
