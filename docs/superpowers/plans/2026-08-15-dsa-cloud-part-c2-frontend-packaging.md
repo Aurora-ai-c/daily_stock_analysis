@@ -23,7 +23,7 @@
 
 ---
 
-### Task C2.1: 静态前端四页(single index.html + app.js + style.css)
+### Task 1: 静态前端四页(single index.html + app.js + style.css)
 
 **Files:**
 - Create: `apps/dsa-cloud-client/static/index.html`
@@ -320,7 +320,7 @@ git commit -m "feat(client): four-panel static UI with DOMPurify + login endpoin
 
 ---
 
-### Task C2.2: 主入口 `app.py`(端口选择 / 浏览器 / 兜底 / 日志)
+### Task 2: 主入口 `app.py`(端口选择 / 浏览器 / 兜底 / 日志)
 
 **Files:**
 - Create: `apps/dsa-cloud-client/app.py`
@@ -436,7 +436,7 @@ git commit -m "feat(client): app entry with port pick, browser open, server log"
 
 ---
 
-### Task C2.3: PyInstaller 打包脚本
+### Task 3: PyInstaller 打包脚本
 
 **Files:**
 - Create: `apps/dsa-cloud-client/build.ps1`

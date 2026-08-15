@@ -23,7 +23,7 @@
 
 ---
 
-### Task C1.1: 配置与 DPAPI
+### Task 1: 配置与 DPAPI
 
 **Files:**
 - Create: `apps/dsa-cloud-client/dsa_client/__init__.py`
@@ -280,7 +280,7 @@ git commit -m "feat(client): config module with DPAPI-encrypted PAT and session 
 
 ---
 
-### Task C1.2: GitHub 客户端(429 backoff + 仓库操作)
+### Task 2: GitHub 客户端(429 backoff + 仓库操作)
 
 **Files:**
 - Create: `apps/dsa-cloud-client/dsa_client/github_client.py`
@@ -460,13 +460,13 @@ class GitHubClient:
         try:
             self.request("GET", f"/repos/{owner}/{repo}")
             return True
-        except RuntimeError:
+        except requests.HTTPError:
             return False
 
     def get_variable(self, owner: str, repo: str, name: str):
         try:
             return self.request("GET", f"/repos/{owner}/{repo}/actions/variables/{name}").get("value")
-        except RuntimeError:
+        except requests.HTTPError:
             return None
 
     def set_variable(self, owner: str, repo: str, name: str, value: str) -> None:
@@ -510,7 +510,7 @@ git commit -m "feat(client): github client with 429 backoff and repo/actions ops
 
 ---
 
-### Task C1.3: 信号解析(最小字段集)
+### Task 3: 信号解析(最小字段集)
 
 **Files:**
 - Create: `apps/dsa-cloud-client/dsa_client/signals.py`
@@ -522,9 +522,10 @@ git commit -m "feat(client): github client with 429 backoff and repo/actions ops
   - `SIGNAL_FIELDS = ("symbol", "as_of_date", "strategy", "action", "entry_price", "stop_loss", "target_price", "confidence", "supports", "conflicts")`
   - `class SignalCard`:含上述字段(dataclass,缺省 None);`to_dict()`
   - `def parse_signal(record: dict) -> SignalCard`:宽容取字段
-  - `def extract_cards(aggregate: dict) -> list[SignalCard]`:兼容两种输入——
+  - `def extract_cards(aggregate: dict) -> list[SignalCard]`:兼容三种输入——
     1. 顶层是 `{"signals": [...]}` / 纯 list
     2. `{"per_symbol": {code: {...}}}` 或 `{code: {...}}` 扁平 symbol 键
+    3. 真实产物形状(探针 `aggregate()` 输出):`{"as_of_date": ..., "symbols": {code: {"as_of_date": ..., "groups": {group: {"signals": {sid: {...}}}}}}}`——父键 code 注入 `symbol`、`strategy` 取 sid、`as_of_date` 缺省回退顶层、组内 signals 为空则整组跳过;producer 无 action/stop_loss/target_price/confidence/supports/conflicts 字段,这些保持 None
 
 - [ ] **Step 1: 写失败测试**
 
@@ -645,7 +646,7 @@ git commit -m "feat(client): signal card parsing with minimal field set"
 
 ---
 
-### Task C1.4: FastAPI 服务(绑定 + token/Origin + /health + API 路由 + 静态挂载)
+### Task 4: FastAPI 服务(绑定 + token/Origin + /health + API 路由 + 静态挂载)
 
 **Files:**
 - Create: `apps/dsa-cloud-client/dsa_client/server.py`
@@ -837,6 +838,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import github_client as gc, signals as sig, config as cfg_mod
@@ -865,6 +867,9 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
                client_factory=None):
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     git_factory = client_factory or (lambda c: gc.GitHubClient(c.get_pat()))
+
+    if static_dir is not None and static_dir.exists():
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     @app.middleware("http")
     async def _headers_only(request, call_next):

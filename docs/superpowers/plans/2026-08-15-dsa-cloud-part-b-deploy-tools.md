@@ -22,7 +22,7 @@
 
 ---
 
-### Task B1: `deploy_user.py` 骨架 + 前置检查 + generate + 启用 Actions
+### Task 1: `deploy_user.py` 骨架 + 前置检查 + generate + 启用 Actions
 
 **Files:**
 - Create: `scripts/deploy_user.py`
@@ -267,7 +267,7 @@ git commit -m "feat(deploy): deploy_user.py scaffold with dry-run, template chec
 
 ---
 
-### Task B2: secrets/变量 merge 逻辑 + 指引输出
+### Task 2: secrets/变量 merge 逻辑 + 指引输出
 
 **Files:**
 - Modify: `scripts/deploy_user.py`
@@ -291,14 +291,16 @@ class TestWriteSecrets:
 
     def test_merge_skips_existing(self):
         api = self._api()
-        existing = {"LLM_API_KEY": "old"}
-        with mock.patch.object(api, "request", return_value=FakeResponse(200, {"secrets": [{"name": "LLM_API_KEY"}]})) as req:
-            api.request = mock.Mock(side_effect=[FakeResponse(200, {"secrets": [{"name": "LLM_API_KEY"}]}), FakeResponse(200, {"key": "k", "key_id": "1"}), FakeResponse(201)])
-            written = deploy_user.write_secrets(api, "alice", "dsa-cloud-alice",
-                                                {"LLM_API_KEY": "new", "WEBHOOK_URL": "https://x"}, overwrite=False, dry_run=False)
+        # 调用序列:GET secrets(发现 LLM_API_KEY 已存在) → GET public-key → PUT WEBHOOK_URL
+        api.request = mock.Mock(side_effect=[
+            FakeResponse(200, {"secrets": [{"name": "LLM_API_KEY"}]}),
+            FakeResponse(200, {"key": "k", "key_id": "1"}),
+            FakeResponse(201),
+        ])
+        written = deploy_user.write_secrets(api, "alice", "dsa-cloud-alice",
+                                            {"LLM_API_KEY": "new", "WEBHOOK_URL": "https://x"}, overwrite=False, dry_run=False)
         assert written == ["WEBHOOK_URL"]
-        # 只 PUT 了不存在的 WEBHOOK_URL
-        puts = [c.args[0] for c in req.call_args_list if c.args[0] == "PUT"]
+        puts = [c.args[0] for c in api.request.call_args_list if c.args[0] == "PUT"]
         assert puts == ["/repos/alice/dsa-cloud-alice/actions/secrets/WEBHOOK_URL"]
 
     def test_overwrite_writes_all(self):
@@ -428,7 +430,7 @@ git commit -m "feat(deploy): merge secrets, STOCK_LIST variable, usage guide"
 
 ---
 
-### Task B3: `--heartbeat-test` + 幂等复核测试
+### Task 3: `--heartbeat-test` + 幂等复核测试
 
 **Files:**
 - Modify: `scripts/deploy_user.py`
@@ -459,7 +461,14 @@ class TestRunDeploy:
         api = _mk_api()
         api.dry_run = False
         calls = []
-        api.request = mock.Mock(side_effect=lambda m, p, **kw: (calls.append((m, p)) or FakeResponse(200, {})))
+
+        def _fake_request(method, path, **kw):
+            calls.append((method, path))
+            if method == "GET" and path.startswith("/repos/tpl/"):
+                return FakeResponse(200, {"is_template": True, "private": True, "permissions": {"pull": True}})
+            return FakeResponse(200, {"secrets": []})
+
+        api.request = mock.Mock(side_effect=_fake_request)
         deploy_user.run_deploy(api, deploy_user.DeployArgs(
             template_owner="tpl", template_repo="tplr", owner="alice",
             repo="dsa-cloud-alice", llm_key=None, notify_webhook=None,
@@ -539,7 +548,7 @@ git commit -m "feat(deploy): heartbeat-test trigger + run_deploy refactor"
 
 ---
 
-### Task B4: `manage_collaborators.py`
+### Task 4: `manage_collaborators.py`
 
 **Files:**
 - Create: `scripts/manage_collaborators.py`
@@ -707,7 +716,7 @@ git commit -m "feat(deploy): manage_collaborators.py add/list/remove"
 
 ---
 
-### Task B5: `docs/DEPLOYMENT.md`
+### Task 5: `docs/DEPLOYMENT.md`
 
 **Files:**
 - Create: `docs/DEPLOYMENT.md`

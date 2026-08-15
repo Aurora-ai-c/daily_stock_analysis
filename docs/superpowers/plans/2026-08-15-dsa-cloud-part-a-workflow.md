@@ -21,7 +21,7 @@
 
 ---
 
-### Task A1: 远程控制契约测试(先写,失败)
+### Task 1: 远程控制契约测试(先写,失败)
 
 **Files:**
 - Create: `tests/test_daily_analysis_workflow_remote.py`
@@ -64,8 +64,13 @@ def _analyze_job(wf: dict) -> dict:
     return wf["jobs"]["analyze"]
 
 
+def _on(wf: dict) -> dict:
+    """yaml 1.1 会把顶层 `on:` 解析为布尔键 True;两种可能都兜住。"""
+    return wf.get("on") or wf.get(True) or {}
+
+
 def test_dispatch_has_stock_list_input():
-    inputs = _load_workflow()["on"]["workflow_dispatch"]["inputs"]
+    inputs = _on(_load_workflow())["workflow_dispatch"]["inputs"]
     assert "stock_list" in inputs, "dispatch 需要 stock_list 输入(客户端触发时覆盖自选股)"
     assert inputs["stock_list"]["type"] == "string"
     assert inputs["stock_list"]["required"] is False
@@ -123,7 +128,7 @@ git commit -m "test: contract tests for remote control workflow changes (red)"
 
 ---
 
-### Task A2: 修改 workflow 满足契约
+### Task 2: 修改 workflow 满足契约
 
 **Files:**
 - Modify: `.github/workflows/00-daily-analysis.yml`
@@ -215,10 +220,10 @@ git commit -m "test: contract tests for remote control workflow changes (red)"
           if git -C .heartbeat-wt diff --cached --quiet; then
             echo "✅ heartbeat 无变更，跳过提交"
           else
-            git -C .heartbeat-wt commit -m "heartbeat: run ${RUN_NUMBER} ${JOB_STATUS} $(date +%Y-%m-%d)"
-            git push origin "HEAD:${HEARTBEAT_BRANCH}" || echo "⚠️ heartbeat push 失败（不阻塞主流程）"
+          git -C .heartbeat-wt commit -m "heartbeat: run ${RUN_NUMBER} ${JOB_STATUS} $(date +%Y-%m-%d)"
+          git push origin "HEAD:${HEARTBEAT_BRANCH}" || echo "⚠️ heartbeat push 失败（不阻塞主流程）"
+          git worktree remove --force .heartbeat-wt 2>/dev/null || rm -rf .heartbeat-wt
           fi
-          git -C .heartbeat-wt worktree remove --force .heartbeat-wt 2>/dev/null || rm -rf .heartbeat-wt
 ```
 
 - [ ] **Step 5: 运行契约测试确认转绿**
@@ -240,7 +245,7 @@ git commit -m "feat(workflow): dispatch stock_list override + heartbeat renew vi
 
 ---
 
-### Task A3: 自触发防护契约测试 + .gitignore
+### Task 3: 自触发防护契约测试 + .gitignore
 
 **Files:**
 - Create: `tests/test_heartbeat_self_trigger_guard.py`
@@ -294,10 +299,15 @@ def _match(value: object, ref: str) -> bool:
     return False
 
 
+def _on(wf: dict) -> dict:
+    """yaml 1.1 把顶层 `on:` 解析为布尔键 True;两种可能都兜住。"""
+    return wf.get("on") or wf.get(True) or {}
+
+
 def test_no_workflow_triggered_by_heartbeat_branch_push():
     failures = []
     for name, wf in _load_all_workflows():
-        push = (wf.get("on") or {}).get("push")
+        push = _on(wf).get("push")
         if not push:
             continue
         branches = push.get("branches") or []

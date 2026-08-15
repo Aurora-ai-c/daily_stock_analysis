@@ -1,0 +1,14 @@
+body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; color: #222; }
+header { padding: 12px 20px; background: #1f6feb; color: #fff; display: flex; align-items: center; gap: 12px; }
+nav { display: flex; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #eee; }
+nav button { border: 1px solid #ccc; background: #fff; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+nav button:hover { background: #f0f6ff; }
+main { max-width: 720px; margin: 20px auto; padding: 0 16px; }
+.tab { display: flex; flex-direction: column; gap: 12px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+input, textarea, select { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+button { cursor: pointer; }
+.ok { color: #1e7e34; }
+.err { color: #c62828; }
+.report-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.report-card button { margin-left: 8px; }
