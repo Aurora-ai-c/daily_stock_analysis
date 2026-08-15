@@ -64,8 +64,13 @@ def _analyze_job(wf: dict) -> dict:
     return wf["jobs"]["analyze"]
 
 
+def _on(wf: dict) -> dict:
+    """yaml 1.1 会把顶层 `on:` 解析为布尔键 True;两种可能都兜住。"""
+    return wf.get("on") or wf.get(True) or {}
+
+
 def test_dispatch_has_stock_list_input():
-    inputs = _load_workflow()["on"]["workflow_dispatch"]["inputs"]
+    inputs = _on(_load_workflow())["workflow_dispatch"]["inputs"]
     assert "stock_list" in inputs, "dispatch 需要 stock_list 输入(客户端触发时覆盖自选股)"
     assert inputs["stock_list"]["type"] == "string"
     assert inputs["stock_list"]["required"] is False
@@ -218,6 +223,7 @@ git commit -m "test: contract tests for remote control workflow changes (red)"
           git -C .heartbeat-wt commit -m "heartbeat: run ${RUN_NUMBER} ${JOB_STATUS} $(date +%Y-%m-%d)"
           git push origin "HEAD:${HEARTBEAT_BRANCH}" || echo "⚠️ heartbeat push 失败（不阻塞主流程）"
           git worktree remove --force .heartbeat-wt 2>/dev/null || rm -rf .heartbeat-wt
+          fi
 ```
 
 - [ ] **Step 5: 运行契约测试确认转绿**
@@ -293,10 +299,15 @@ def _match(value: object, ref: str) -> bool:
     return False
 
 
+def _on(wf: dict) -> dict:
+    """yaml 1.1 把顶层 `on:` 解析为布尔键 True;两种可能都兜住。"""
+    return wf.get("on") or wf.get(True) or {}
+
+
 def test_no_workflow_triggered_by_heartbeat_branch_push():
     failures = []
     for name, wf in _load_all_workflows():
-        push = (wf.get("on") or {}).get("push")
+        push = _on(wf).get("push")
         if not push:
             continue
         branches = push.get("branches") or []

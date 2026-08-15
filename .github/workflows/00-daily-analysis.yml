@@ -625,6 +625,7 @@ jobs:
           git -C .heartbeat-wt commit -m "heartbeat: run ${RUN_NUMBER} ${JOB_STATUS} $(date +%Y-%m-%d)"
           git push origin "HEAD:${HEARTBEAT_BRANCH}" || echo "⚠️ heartbeat push 失败（不阻塞主流程）"
           git worktree remove --force .heartbeat-wt 2>/dev/null || rm -rf .heartbeat-wt
+          fi
       
       - name: 显示运行结果
         if: always()
