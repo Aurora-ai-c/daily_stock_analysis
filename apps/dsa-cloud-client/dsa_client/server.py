@@ -3,9 +3,8 @@
 
 from __future__ import annotations
 
+import hmac
 import json
-import os
-import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -13,7 +12,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import github_client as gc, signals as sig, config as cfg_mod
+from . import github_client as gc, config as cfg_mod
 
 CONFIG_DIR = cfg_mod.CONFIG_DIR
 
@@ -33,8 +32,10 @@ class LoginBody(BaseModel):
     pat: str
 
 
-def _check_token(config, token: str) -> bool:
-    return token == config.token
+def _check_token(config, token) -> bool:
+    if not isinstance(token, str) or not isinstance(config.token, str):
+        return False
+    return hmac.compare_digest(token, config.token)
 
 
 def _check_origin(request, config) -> bool:
