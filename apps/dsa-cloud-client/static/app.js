@@ -24,6 +24,16 @@ function show(elId, msg, ok = true) {
   el.className = ok ? "ok" : "err";
 }
 
+function reportsStatus(msg, ok) {
+  let el = document.getElementById("reports-status");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "reports-status";
+    document.getElementById("reports-list").insertAdjacentElement("beforebegin", el);
+  }
+  show(el.id, msg, ok);
+}
+
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t) => (t.hidden = t.id !== `tab-${name}`));
 }
@@ -42,8 +52,8 @@ function renderReports(reports) {
       const btn = document.createElement("button");
       btn.textContent = "下载到本地";
       btn.onclick = async () => {
-        try { await api(`/reports/${r.id}/download`, { method: "GET" }); show("reports-list", "已存档到本地", true); }
-        catch (e) { show("reports-list", "下载失败: " + e.message, false); }
+        try { await api(`/reports/${r.id}/download`, { method: "GET" }); reportsStatus("已存档到本地", true); }
+        catch (e) { reportsStatus("下载失败: " + e.message, false); }
       };
       card.appendChild(btn);
     }
