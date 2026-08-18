@@ -3,21 +3,24 @@
 
 import sys
 import types
-from importlib import import_module
 
 
 def ensure_litellm_stub() -> None:
-    """Install a minimal litellm stub unless a test already provided one."""
+    """Force-install a minimal litellm stub.
+
+    Also removes any real litellm modules already imported, so callers get
+    stub semantics regardless of test collection order. Tests that need real
+    litellm types must call remove_litellm_stub() first and re-install the
+    stub afterwards; importing real litellm also loads the developer's
+    .env via dotenv, so those tests must restore os.environ too (see
+    test_llm_usage.py for the full pattern).
+    """
     existing = sys.modules.get("litellm")
     if getattr(existing, "__dsa_test_stub__", False):
         return
-    if existing is not None:
-        try:
-            import_module("litellm.types.utils")
-            return
-        except ModuleNotFoundError:
-            for module_name in ("litellm.types.utils", "litellm.types", "litellm"):
-                sys.modules.pop(module_name, None)
+
+    for module_name in ("litellm.types.utils", "litellm.types", "litellm"):
+        sys.modules.pop(module_name, None)
 
     litellm_stub = types.ModuleType("litellm")
     litellm_stub.__dsa_test_stub__ = True

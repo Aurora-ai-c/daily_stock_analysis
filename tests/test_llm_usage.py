@@ -21,12 +21,31 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from tests.litellm_stub import ensure_litellm_stub, remove_litellm_stub
 
+_env_snapshot = dict(os.environ)
 remove_litellm_stub()
 try:
     from litellm.types.utils import Usage
 except ModuleNotFoundError:
     ensure_litellm_stub()
     from litellm.types.utils import Usage
+
+# Importing real litellm mutates the process environment (it sets LITELLM_MODEL
+# and possibly other vars). Restore the env snapshot so those values do not
+# leak into every test collected after this module (cross-file pollution; see
+# test_litellm_stub_hygiene.py). This module only needs the bound Usage name.
+for _k in list(os.environ):
+    if _k not in _env_snapshot:
+        del os.environ[_k]
+for _k, _v in _env_snapshot.items():
+    os.environ[_k] = _v
+
+# Remove real litellm again and restore the stub so later importers of
+# tests.litellm_stub.ensure_litellm_stub() still get stub semantics (this
+# module already bound the real Usage name above and no longer needs real
+# litellm in sys.modules).
+for _module_name in ("litellm.types.utils", "litellm.types", "litellm"):
+    sys.modules.pop(_module_name, None)
+ensure_litellm_stub()
 
 from src.llm.usage import (
     attach_legacy_message_stability_audit,
@@ -1790,13 +1809,16 @@ class TestLLMUsageMigration(unittest.TestCase):
                 """
             )
             conn.commit()
+        conn.close()
 
     def _usage_columns(self, db_path: Path):
         with sqlite3.connect(db_path) as conn:
-            return {
+            columns = {
                 row[1]
                 for row in conn.execute("PRAGMA table_info(llm_usage)").fetchall()
             }
+        conn.close()
+        return columns
 
     def _assert_all_telemetry_columns(self, db_path: Path):
         columns = self._usage_columns(db_path)
@@ -1820,6 +1842,7 @@ class TestLLMUsageMigration(unittest.TestCase):
             db._ensure_llm_usage_telemetry_columns()
 
             self._assert_all_telemetry_columns(db_path)
+            DatabaseManager.reset_instance()
 
     def test_existing_sqlite_table_gets_partial_missing_columns(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1837,6 +1860,7 @@ class TestLLMUsageMigration(unittest.TestCase):
             DatabaseManager(db_url=f"sqlite:///{db_path}")
 
             self._assert_all_telemetry_columns(db_path)
+            DatabaseManager.reset_instance()
 
     def test_existing_sqlite_table_with_all_telemetry_columns_is_noop(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1850,6 +1874,7 @@ class TestLLMUsageMigration(unittest.TestCase):
             DatabaseManager(db_url=f"sqlite:///{db_path}")
 
             self._assert_all_telemetry_columns(db_path)
+            DatabaseManager.reset_instance()
 
     def test_existing_sqlite_table_ignores_concurrent_duplicate_column(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1870,6 +1895,7 @@ class TestLLMUsageMigration(unittest.TestCase):
                             "ALTER TABLE llm_usage ADD COLUMN provider_usage_json TEXT"
                         )
                         conn.commit()
+                    conn.close()
                     raise OperationalError(
                         statement,
                         {},
@@ -1894,6 +1920,7 @@ class TestLLMUsageMigration(unittest.TestCase):
 
             self.assertTrue(race_fired["value"])
             self._assert_all_telemetry_columns(db_path)
+            DatabaseManager.reset_instance()
 
     def test_existing_sqlite_table_retries_locked_column_backfill(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1937,6 +1964,7 @@ class TestLLMUsageMigration(unittest.TestCase):
             ]
             self.assertEqual(len(storage_retry_sleeps), 1)
             self._assert_all_telemetry_columns(db_path)
+            DatabaseManager.reset_instance()
 
 
 if __name__ == "__main__":

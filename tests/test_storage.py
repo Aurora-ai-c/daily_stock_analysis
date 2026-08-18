@@ -33,7 +33,8 @@ class TestStorage(unittest.TestCase):
                     ).fetchall()
                     if index_info[2] is not None and int(index_info[5]) == 1
                 ]
-            return indexes
+        conn.close()
+        return indexes
 
     @staticmethod
     def _list_sqlite_unique_indexes(db_path: str, table_name: str) -> dict[str, list[str]]:
@@ -50,7 +51,8 @@ class TestStorage(unittest.TestCase):
                     if column_name is not None:
                         index_columns.append(column_name)
                 unique_indexes[index_name] = index_columns
-            return unique_indexes
+        conn.close()
+        return unique_indexes
 
     def test_legacy_intelligence_items_url_unique_index_rebuilds_without_collision(self) -> None:
         temp_dir = tempfile.TemporaryDirectory()
@@ -121,6 +123,8 @@ class TestStorage(unittest.TestCase):
                          '2026-01-02 00:00:00', '2026-01-02 00:00:00', 'market', None, 'cn', None),
                     ],
                 )
+                conn.commit()
+            conn.close()
 
             unique_indexes_before = self._list_sqlite_unique_indexes(db_path, "intelligence_items")
             self.assertIn("uix_intelligence_item_url_legacy", unique_indexes_before)
@@ -142,6 +146,7 @@ class TestStorage(unittest.TestCase):
                 temp_tables = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'intelligence_items_recreate_tmp_%'"
                 ).fetchall()
+            conn.close()
 
             self.assertEqual(table_count, 2)
             self.assertEqual(temp_tables, [])
@@ -284,6 +289,8 @@ class TestStorage(unittest.TestCase):
                         ("600519", "cn", "analysis", 16, "trace-16", "buy", "3d", "intraday", "2026-01-01", deeply_nested_json),
                     ],
                 )
+                conn.commit()
+            conn.close()
 
             with self.assertLogs("src.storage", level="INFO") as logs:
                 DatabaseManager(db_url=f"sqlite:///{db_path}")
@@ -293,6 +300,7 @@ class TestStorage(unittest.TestCase):
                 rows = conn.execute(
                     "SELECT id, decision_profile FROM decision_signals ORDER BY id"
                 ).fetchall()
+            conn.close()
 
             self.assertIn("decision_profile", columns)
             self.assertEqual(rows[0], (1, "balanced"))
@@ -391,6 +399,8 @@ class TestStorage(unittest.TestCase):
                         ('{"decision_profile":"balanced"}', ""),
                     ],
                 )
+                conn.commit()
+            conn.close()
 
             with self.assertLogs("src.storage", level="INFO") as logs:
                 DatabaseManager(db_url=f"sqlite:///{db_path}")
@@ -399,6 +409,7 @@ class TestStorage(unittest.TestCase):
                 profiles = conn.execute(
                     "SELECT decision_profile FROM decision_signals ORDER BY id"
                 ).fetchall()
+            conn.close()
 
             self.assertEqual(
                 profiles,
@@ -1155,8 +1166,8 @@ class TestStorage(unittest.TestCase):
 
             self.assertEqual(total, 1)
         finally:
-            temp_dir.cleanup()
             DatabaseManager.reset_instance()
+            temp_dir.cleanup()
 
 if __name__ == '__main__':
     unittest.main()

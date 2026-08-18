@@ -2780,18 +2780,20 @@ class LocalCliGenerationBackend(GenerationBackend):
         if process.poll() is not None:
             return
         if os.name == "nt":
+            try:
+                subprocess.run(
+                    ["taskkill", "/T", "/F", "/PID", str(process.pid)],
+                    capture_output=True,
+                    timeout=5,
+                )
+            except Exception:
+                pass
             ctrl_break = getattr(signal, "CTRL_BREAK_EVENT", None)
             if ctrl_break is not None:
                 try:
                     process.send_signal(ctrl_break)
-                    process.wait(timeout=2)
-                    return
                 except Exception:
                     pass
-            try:
-                process.terminate()
-            except Exception:
-                return
             try:
                 process.wait(timeout=2)
             except subprocess.TimeoutExpired:

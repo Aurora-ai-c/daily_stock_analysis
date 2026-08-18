@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import os
+import sys
 import time
 import threading
 from collections.abc import Awaitable, Callable
@@ -16,10 +18,72 @@ from warnings import warn
 import anyio.to_thread
 import fastapi.testclient
 import httpx
+import pytest
 import starlette.testclient
 from anyio._backends import _asyncio
 
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_TESTS_DIR)
+sys.path.insert(0, _TESTS_DIR)
+sys.path.insert(0, _REPO_ROOT)
+
+from tests.litellm_stub import ensure_litellm_stub  # noqa: E402
+
 T = TypeVar("T")
+
+# Importing real litellm calls dotenv.load_dotenv() at import time, which walks
+# up from the CWD and loads a parent-directory .env (e.g. the developer's real
+# D:\AI\daily_stock_analysis\.env) into os.environ. That leaks developer-local
+# config (LITELLM_MODEL, API keys, ...) into every test in the process and
+# breaks tests that assume a clean environment (see test_system_config_service
+# cross-file failures). Snapshot the env before any test module imports litellm
+# and restore it once collection finishes, so tests run with the same
+# environment they would have standalone.
+_ENV_SNAPSHOT = dict(os.environ)
+
+
+def _restore_env(snapshot: dict) -> None:
+    for key in list(os.environ):
+        if key not in snapshot:
+            del os.environ[key]
+    for key, value in snapshot.items():
+        os.environ[key] = value
+
+
+@pytest.fixture(autouse=True)
+def _no_env_leak_between_tests():
+    """Restore os.environ after every test.
+
+    Runtime helpers may load the developer's .env into the process
+    environment mid-suite (e.g. src.strategy_signal_probe.resolve_watchlist
+    calls dotenv.load_dotenv(), injecting LITELLM_MODEL and other local keys
+    that monkeypatch never restores). Without this, every later test sees
+    developer-local config and fails (see test_system_config_service
+    cross-file failures).
+    """
+    snapshot = dict(os.environ)
+    yield
+    _restore_env(snapshot)
+
+
+def pytest_configure(config) -> None:
+    """Install the litellm stub before any test module is collected.
+
+    Test modules collected in this process expect stub semantics by default
+    (they call ensure_litellm_stub() at module level and would silently bind
+    real litellm otherwise, depending on collection order). Installing the
+    stub here makes the whole session deterministic: real litellm only enters
+    the process where a test explicitly removes the stub first.
+    """
+    ensure_litellm_stub()
+
+
+def pytest_collection_finish(session) -> None:
+    _restore_env(_ENV_SNAPSHOT)
+    # Re-install the stub in case a collected module removed it (e.g.
+    # test_llm_usage.py / test_llm_adapter_provider_trace.py import real
+    # litellm types); the session should run with stub semantics.
+    ensure_litellm_stub()
 
 _original_call_soon_threadsafe = asyncio.BaseEventLoop.call_soon_threadsafe
 

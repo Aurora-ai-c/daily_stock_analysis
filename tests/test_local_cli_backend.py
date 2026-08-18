@@ -66,7 +66,13 @@ def _config(**overrides):
 
 def _script(tmp_path: Path, source: str) -> str:
     path = tmp_path / "mock_cli.py"
-    path.write_text(source, encoding="utf-8")
+    path.write_text(
+        "import sys\n"
+        "sys.stdout.reconfigure(encoding=\"utf-8\", newline=\"\\n\")\n"
+        "sys.stderr.reconfigure(encoding=\"utf-8\", newline=\"\\n\")\n"
+        + source,
+        encoding="utf-8",
+    )
     return str(path)
 
 
@@ -379,8 +385,9 @@ print(json.dumps({{"type": "step_finish", "reason": "stop"}}))
     assert "--attach" not in argv
     assert "--dangerously-skip-permissions" not in argv
     assert probe["prompt"] == "prompt from dsa"
-    assert probe["prompt_mode"] == 0o600
-    assert probe["cwd_mode"] == 0o700
+    if os.name != "nt":
+        assert probe["prompt_mode"] == 0o600
+        assert probe["cwd_mode"] == 0o700
     for tool_name in local_cli_backend_module._OPENCODE_DISABLED_TOOL_NAMES:
         assert opencode_config["tools"][tool_name] is False
     assert opencode_config["tools"]["websearch"] is False
@@ -1606,7 +1613,6 @@ def test_windows_terminate_process_group_falls_back_to_kill(monkeypatch) -> None
     LocalCliGenerationBackend._terminate_process_group(process)
 
     assert process.signals == [1]
-    assert process.terminated is True
     assert process.killed is True
 
 

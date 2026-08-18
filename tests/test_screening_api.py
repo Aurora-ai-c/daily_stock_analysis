@@ -1980,7 +1980,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
 
         def record_remaining(value: Any) -> Any:
             observed_timeouts.append(provider._akshare_timeout_seconds())
-            time.sleep(0.005)
+            time.sleep(0.02)
             return value
 
         with (
