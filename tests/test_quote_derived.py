@@ -31,3 +31,21 @@ def test_no_bars_means_none():
     q = Quote(code="600519", price=10.0)
     d = QuoteDerivedCalculator().calculate(q)
     assert d.volume_ratio is None
+
+
+def test_pre_close_zero_gives_none():
+    q = Quote(code="600519", price=10.0, pre_close=0, high=11.0, low=9.0)
+    d = QuoteDerivedCalculator().calculate(q)
+    assert d.amplitude is None
+
+
+def test_insufficient_bars_gives_none():
+    q = Quote(code="600519", price=10.0, volume=3000)
+    d = QuoteDerivedCalculator().calculate(q, bars=_bars(4))
+    assert d.volume_ratio is None
+
+
+def test_zero_volume_avg_gives_none():
+    q = Quote(code="600519", price=10.0, volume=3000)
+    d = QuoteDerivedCalculator().calculate(q, bars=_bars(6, base_vol=0))
+    assert d.volume_ratio is None
