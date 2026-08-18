@@ -1534,3 +1534,54 @@ def format_copyable_diagnostics(summary: Dict[str, Any]) -> str:
         f"reason: {sanitize_diagnostic_text(summary.get('reason'), max_length=160) or 'unknown'}",
     ]
     return "\n".join(lines)
+
+
+@dataclass
+class DiagnosticRecord:
+    """审计记录基类:共享 to_dict(过滤 None)与 sanitize(脱敏)。"""
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload = {}
+        for field_name in self.__dataclass_fields__:  # noqa: PLC0206
+            value = getattr(self, field_name, None)
+            if value is not None:
+                payload[field_name] = value
+        return payload
+
+    def sanitize(self) -> Dict[str, Any]:
+        payload = self.to_dict()
+        for key in ("error_sanitized", "detail", "remote_ip", "params_hash"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                payload[key] = sanitize_diagnostic_text(value, max_length=300)
+        return payload
+
+
+@dataclass
+class PipelineStepDiagnostic(DiagnosticRecord):
+    run_id: str
+    step_name: str
+    status: str
+    latency_ms: Optional[int] = None
+    artifact_path: Optional[str] = None
+    error_sanitized: Optional[str] = None
+    degraded_reasons: List[str] = field(default_factory=list)
+
+
+@dataclass
+class McpCallDiagnostic(DiagnosticRecord):
+    key_id: str
+    tool_name: str
+    remote_ip: str
+    params_hash: str
+    latency_ms: Optional[int] = None
+    status: str = "ok"
+    success: bool = True
+
+
+@dataclass
+class UpdateEventDiagnostic(DiagnosticRecord):
+    version: str
+    event: str
+    status: str
+    detail: Optional[str] = None
