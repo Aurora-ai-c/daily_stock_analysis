@@ -1,0 +1,52 @@
+# config/fetchers.yaml
+# 数据源注册表:实例数据。新增源 = 代码 + 此条目(两步都不能省)。
+# capabilities: quote/bar/fundamental;env_required 缺失的源启动时自动禁用(warn-only)。
+fetchers:
+  - name: akshare
+    module: data_provider.akshare_fetcher
+    fetcher_class: AkshareFetcher
+    markets: [cn, hk]
+    capabilities: [quote, bar, fundamental]
+    priority: 1
+    enabled: true
+    rate_limit: 20
+    timeout: 15
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: tushare
+    module: data_provider.tushare_fetcher
+    fetcher_class: TushareFetcher
+    markets: [cn, hk]
+    capabilities: [quote, bar, fundamental]
+    priority: 2
+    enabled: true
+    rate_limit: 200
+    timeout: 15
+    env_required: [TUSHARE_TOKEN]
+    health_check: null
+    version: "1"
+  - name: yfinance
+    module: data_provider.yfinance_fetcher
+    fetcher_class: YfinanceFetcher
+    markets: [cn, hk, us, jp, kr, tw]
+    capabilities: [quote, bar, fundamental]
+    priority: 4
+    enabled: true
+    rate_limit: 10
+    timeout: 20
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: finnhub
+    module: data_provider.finnhub_fetcher
+    fetcher_class: FinnhubFetcher
+    markets: [us]
+    capabilities: [quote, bar, fundamental]
+    priority: 5
+    enabled: true
+    rate_limit: 60
+    timeout: 10
+    env_required: [FINNHUB_API_KEY]
+    health_check: null
+    version: "1"
