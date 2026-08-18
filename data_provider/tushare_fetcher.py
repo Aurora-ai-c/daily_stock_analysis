@@ -14,6 +14,8 @@ TushareFetcher - 备用数据源 1 (Priority 2)
 3. 使用 tenacity 实现指数退避重试
 """
 
+from __future__ import annotations
+
 import json as _json
 import logging
 import re
@@ -1289,6 +1291,61 @@ class TushareFetcher(BaseFetcher):
             "70集中度": round(concentration_70/100, 4)
         }
 
+    def to_quote(self, raw: UnifiedRealtimeQuote) -> Quote:
+        """旧 UnifiedRealtimeQuote → 新 Quote(缺失字段容忍)。"""
+        from data_provider.contracts import Quote
+        return Quote(
+            code=raw.code, name=raw.name,
+            price=raw.price, open_price=raw.open_price, high=raw.high, low=raw.low,
+            pre_close=raw.pre_close, volume=raw.volume, amount=raw.amount,
+            change_pct=raw.change_pct, change_amount=raw.change_amount,
+            tz="Asia/Shanghai", currency=raw.currency, market=raw.market,
+            fetched_at=raw.fetched_at, provider_timestamp=raw.provider_timestamp,
+            is_stale=raw.is_stale, stale_seconds=raw.stale_seconds,
+            fallback_from=raw.fallback_from, data_quality=raw.data_quality,
+            missing_fields=raw.missing_fields,
+        )
+
+    def to_bar(self, df: pd.DataFrame) -> list[Bar]:
+        """标准日线 DataFrame → list[Bar]。"""
+        from data_provider.contracts import Bar
+        bars = []
+        for _, row in df.iterrows():
+            try:
+                bars.append(Bar(
+                    date=pd.to_datetime(row["date"]).date(),
+                    open=float(row["open"]), high=float(row["high"]),
+                    low=float(row["low"]), close=float(row["close"]),
+                    volume=int(row["volume"]),
+                    amount=float(row["amount"]) if pd.notna(row.get("amount")) else None,
+                    pct_chg=float(row["pct_chg"]) if pd.notna(row.get("pct_chg")) else None,
+                ))
+            except (KeyError, ValueError, TypeError):
+                continue
+        return bars
+
+    def to_fundamental(self, payload: dict) -> Optional[FundamentalRaw]:
+        """tushare 财报 dict → FundamentalRaw;缺 report_date 返回 None。"""
+        from data_provider.contracts import FundamentalRaw
+        report_date = payload.get("report_date")
+        if not report_date:
+            return None
+        return FundamentalRaw(
+            report_date=pd.to_datetime(report_date).date(),
+            fiscal_period=str(payload.get("fiscal_period") or "FY"),
+            market=str(payload.get("market") or "cn"),
+            total_assets=payload.get("total_assets"),
+            total_liabilities=payload.get("total_liabilities"),
+            total_equity=payload.get("total_equity"),
+            revenue=payload.get("revenue"),
+            net_income=payload.get("net_income"),
+            operating_cashflow=payload.get("operating_cashflow"),
+            investing_cashflow=payload.get("investing_cashflow"),
+            financing_cashflow=payload.get("financing_cashflow"),
+            gross_margin=payload.get("gross_margin"),
+            dividend_yield=payload.get("dividend_yield"),
+            industry=payload.get("industry"),
+        )
 
 
 if __name__ == "__main__":
