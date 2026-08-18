@@ -3355,6 +3355,7 @@ def get_dsa_realtime_quote(stock_code: str) -> Dict[str, Any]:
 
 def get_dsa_fundamental_context(stock_code: str) -> Dict[str, Any]:
     manager = _get_dsa_fetcher_manager()
+    # 契约层 FundamentalRaw:返回 dict 形状不变(内部 model_dump 合并),读字段保持 get 容错
     context = manager.get_fundamental_context(stock_code, budget_seconds=4.0)
     return _compact_fundamental_context(_remove_non_finite_json_values(_to_plain(context)))
 

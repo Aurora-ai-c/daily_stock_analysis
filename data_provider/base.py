@@ -630,6 +630,13 @@ class DataFetcherManager:
         "FinnhubFetcher": {"us"},
         "AlphaVantageFetcher": {"us"},
     }
+    # 契约 v2 目标源(提供 to_fundamental):flag 开启时 get_fundamental_context 优先走其适配
+    _FUNDAMENTAL_CONTRACT_SOURCES = (
+        "AkshareFetcher",
+        "TushareFetcher",
+        "YfinanceFetcher",
+        "FinnhubFetcher",
+    )
     _daily_source_health = CircuitBreaker(failure_threshold=3, cooldown_seconds=300.0)
     _CONCEPT_RANKINGS_CACHE_TTL_SECONDS = 300.0
     _CONCEPT_RANKINGS_EMPTY_CACHE_TTL_SECONDS = 30.0
@@ -3168,6 +3175,8 @@ class DataFetcherManager:
             block for block, status in active_statuses.items() if status != "ok"
         ]
 
+        self._merge_fundamental_contract(config, market, bundle_payload, result_ctx)
+
         result_ctx["elapsed_ms"] = int((time.time() - start_ts) * 1000)
         if cache_ttl > 0 and self._should_cache_fundamental_context(result_ctx):
             with self._fundamental_cache_lock:
@@ -3207,6 +3216,52 @@ class DataFetcherManager:
             "errors": [reason],
             **blocks,
         }
+
+    def _merge_fundamental_contract(
+        self,
+        config,
+        market: str,
+        bundle_payload: Any,
+        result_ctx: Dict[str, Any],
+    ) -> None:
+        """flag 开启时,四目标源优先经 fetcher.to_fundamental 产出 FundamentalRaw 再 model_dump 合并(保留旧 key 命名)。
+
+        兼容期:flag 关闭或目标源未提供 to_fundamental / 缺 report_date 时直接返回,
+        返回 dict 形状与旧路径完全一致。合并只新增契约 key,不覆盖既有块级 key。
+        """
+        if not getattr(config, "connector_v2_enabled", False):
+            return
+        earnings_payload = bundle_payload.get("earnings") if isinstance(bundle_payload, dict) else None
+        financial_report = earnings_payload.get("financial_report") if isinstance(earnings_payload, dict) else None
+        if not isinstance(financial_report, dict):
+            return
+        growth_payload = bundle_payload.get("growth") if isinstance(bundle_payload, dict) else None
+        if not isinstance(growth_payload, dict):
+            growth_payload = {}
+        raw_payload = {
+            "report_date": financial_report.get("report_date"),
+            "revenue": financial_report.get("revenue"),
+            "net_income": financial_report.get("net_profit_parent"),
+            "operating_cashflow": financial_report.get("operating_cash_flow"),
+            "gross_margin": growth_payload.get("gross_margin"),
+            "dividend_yield": financial_report.get("dividend_yield"),
+            "industry": financial_report.get("industry"),
+            "market": market,
+        }
+        for fetcher_name in self._FUNDAMENTAL_CONTRACT_SOURCES:
+            fetcher = self._get_fetcher_by_name(fetcher_name)
+            to_fundamental = getattr(fetcher, "to_fundamental", None) if fetcher is not None else None
+            if not callable(to_fundamental):
+                continue
+            try:
+                fr = to_fundamental(raw_payload)
+            except Exception as exc:  # noqa: BLE001 - 契约适配失败时回退旧路径
+                logger.debug("[基本面契约] %s to_fundamental 失败,回退旧路径: %s", fetcher_name, exc)
+                return
+            if fr is None:
+                return
+            result_ctx.update(fr.model_dump())
+            return
 
     def get_fundamental_context(
         self,
@@ -3501,6 +3556,8 @@ class DataFetcherManager:
             result_ctx["status"] = "partial"
         else:
             result_ctx["status"] = "ok"
+
+        self._merge_fundamental_contract(config, market, bundle_payload, result_ctx)
 
         result_ctx["elapsed_ms"] = int((time.time() - start_ts) * 1000)
         if cache_ttl > 0 and self._should_cache_fundamental_context(result_ctx):

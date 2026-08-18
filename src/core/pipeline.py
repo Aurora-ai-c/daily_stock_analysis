@@ -527,6 +527,7 @@ class StockAnalysisPipeline:
             # - 关闭开关时仍返回 not_supported 结构
             fundamental_context = None
             try:
+                # 契约层 FundamentalRaw:返回 dict 形状不变(内部 model_dump 合并),读字段保持 get 容错
                 fundamental_context = self.fetcher_manager.get_fundamental_context(
                     code,
                     budget_seconds=getattr(

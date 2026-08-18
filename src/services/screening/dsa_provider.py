@@ -93,6 +93,7 @@ def _fetch_candidate_context(provider: dict[str, Any], pick: Pick) -> dict[str, 
         return payload if isinstance(payload, dict) else {}
 
     quote = _call_optional_provider(provider.get("get_realtime_quote"), pick.code)
+    # 契约层 FundamentalRaw:输入 dict 形状不变(内部 model_dump 合并),读字段保持 get 容错
     fundamentals = _call_optional_provider(provider.get("get_fundamental_context"), pick.code)
     news = _call_news_provider(provider.get("search_stock_news"), pick)
     return {
