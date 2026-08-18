@@ -746,6 +746,36 @@ class DataFetcherManager:
         with self._get_fetcher_call_lock(fetcher):
             return method(*args, **kwargs)
 
+    # 模块级缓存:fetcher 类名 → 注册表 markets(懒加载;加载失败回退空映射=全部视为支持)
+    _registry_market_support_cache: Optional[Dict[str, frozenset]] = None
+    _registry_market_support_lock = RLock()
+
+    @classmethod
+    def _load_registry_market_support(cls) -> Dict[str, frozenset]:
+        """加载 fetcher 类名 → markets 映射(带缓存)。
+
+        加载失败(文件缺失/解析/校验错误)时 warn 并回退空映射:全部视为支持,
+        与旧硬编码语义一致(未列出=支持),日线市场过滤永不因注册表抛异常。
+        """
+        if cls._registry_market_support_cache is not None:
+            return cls._registry_market_support_cache
+        with cls._registry_market_support_lock:
+            if cls._registry_market_support_cache is not None:
+                return cls._registry_market_support_cache
+            try:
+                from data_provider.specs import DEFAULT_REGISTRY_PATH, load_fetcher_specs
+
+                cls._registry_market_support_cache = {
+                    spec.fetcher_class: frozenset(spec.markets)
+                    for spec in load_fetcher_specs(DEFAULT_REGISTRY_PATH)
+                }
+            except Exception as exc:
+                logger.warning(
+                    "[数据源路由] 注册表加载失败,日线市场过滤回退全支持: %s", exc
+                )
+                cls._registry_market_support_cache = {}
+        return cls._registry_market_support_cache
+
     @classmethod
     def _filter_daily_fetchers_for_market(
         cls,
@@ -758,12 +788,7 @@ class DataFetcherManager:
         ``_DAILY_MARKET_FETCHER_SUPPORT``;未注册的 fetcher 视为支持(保持原语义)。
         """
 
-        from data_provider.specs import DEFAULT_REGISTRY_PATH, load_fetcher_specs
-
-        support = {
-            spec.fetcher_class: frozenset(spec.markets)
-            for spec in load_fetcher_specs(DEFAULT_REGISTRY_PATH)
-        }
+        support = cls._load_registry_market_support()
         kept: List[BaseFetcher] = []
         skipped: List[str] = []
         for fetcher in fetchers:

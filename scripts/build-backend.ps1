@@ -136,6 +136,7 @@ $pyInstallerArgs = @(
   '--add-data', 'static;static',
   '--add-data', 'strategies;strategies',
   '--add-data', 'src/assets/share_image;src/assets/share_image',
+  '--add-data', 'config;config',
   '--collect-data', 'litellm',
   '--collect-data', 'tiktoken',
   '--collect-data', 'akshare',
@@ -186,6 +187,15 @@ if (-not (Test-Path $packagedAkshareCalendar)) {
 }
 if (-not (Test-Path $packagedAkshareCalendar)) {
   throw 'Packaged AkShare calendar data not found under dist\backend\stock_analysis.'
+}
+
+Write-Host 'Verifying packaged fetchers registry...'
+$packagedFetcherRegistry = Join-Path 'dist\backend\stock_analysis' '_internal\config\fetchers.yaml'
+if (-not (Test-Path $packagedFetcherRegistry)) {
+  $packagedFetcherRegistry = Join-Path 'dist\backend\stock_analysis' 'config\fetchers.yaml'
+}
+if (-not (Test-Path $packagedFetcherRegistry)) {
+  throw 'Packaged fetchers registry config\fetchers.yaml not found under dist\backend\stock_analysis.'
 }
 
 Write-Host 'Verifying static asset references (packaged)...'
