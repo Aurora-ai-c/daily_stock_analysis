@@ -31,7 +31,8 @@ from src.services.market_symbol_utils import is_suffix_market_symbol
 from src.services.run_diagnostics import record_provider_run, record_provider_run_started
 from .fundamental_adapter import AkshareFundamentalAdapter
 from .yfinance_fundamental_adapter import YfinanceFundamentalAdapter
-from .realtime_types import CircuitBreaker
+from .realtime_types import CircuitBreaker, UnifiedRealtimeQuote
+from .specs import FetcherSpec
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -634,6 +635,9 @@ class DataFetcherManager:
     _CONCEPT_RANKINGS_EMPTY_CACHE_TTL_SECONDS = 30.0
     _concept_rankings_cache_lock = RLock()
     _concept_rankings_cache: Dict[int, Tuple[float, List[Dict], List[Dict]]] = {}
+
+    # 连接器 v2 注册表路由(flag 开启时):name → enabled FetcherSpec,惰性加载
+    registry_specs: Optional[Dict[str, FetcherSpec]] = None
 
     def __init__(self, fetchers: Optional[List[BaseFetcher]] = None):
         """
@@ -1754,9 +1758,14 @@ class DataFetcherManager:
         config = get_config()
 
         # 如果实时行情功能被禁用，直接返回 None
-        if not config.enable_realtime_quote:
+        # (getattr 兜底:测试/嵌入场景可能注入不完整 config)
+        if not getattr(config, "enable_realtime_quote", True):
             logger.debug(f"[实时行情] 功能已禁用，跳过 {stock_code}")
             return None
+
+        # 连接器 v2 注册表路由(flag 开启时;Part A 过渡期默认关闭)
+        if getattr(config, "connector_v2_enabled", False):
+            return self._get_quote_via_registry(stock_code, config)
 
         # ----------------------------------------------------------
         # 美股 (指数 + 个股) / 港股 — 专用双源路由
@@ -2089,6 +2098,68 @@ class DataFetcherManager:
                 error_message=error_reason,
             )
             logger.debug(f"[实时行情] {stock_code} {fetcher_name} 获取失败: {e}")
+        return None
+
+    def _registry_specs(self) -> Dict[str, FetcherSpec]:
+        """返回 name → enabled spec(带缓存)。"""
+        if getattr(self, "_registry_cache", None) is None:
+            from data_provider.registry import discover_fetchers
+            self._registry_cache = {s.name: s for s in discover_fetchers() if s.enabled}
+        return self._registry_cache
+
+    def _spec_instance(self, spec: FetcherSpec):
+        """按 spec 解析 fetcher 实例(优先现有 _fetchers_by_name 或惰性创建)。"""
+        return self._fetchers_by_name.get(spec.name) or self._fetchers_by_name.get(spec.fetcher_class)
+
+    def _try_fetcher_quote_spec(
+        self,
+        spec: FetcherSpec,
+        stock_code: str,
+        **kw,
+    ) -> Optional[UnifiedRealtimeQuote]:
+        """按 spec 取 fetcher 实例并尝试实时行情;失败返回 None。"""
+        fetcher = self._spec_instance(spec)
+        if fetcher is None or not hasattr(fetcher, "get_realtime_quote"):
+            return None
+        try:
+            quote = self._call_fetcher_method(fetcher, "get_realtime_quote", stock_code, **kw)
+            if quote is not None and quote.has_basic_data():
+                return quote
+        except Exception as exc:
+            logger.debug(f"[实时行情] {stock_code} {spec.name} 注册表源获取失败: {exc}")
+        return None
+
+    def _get_quote_via_registry(
+        self,
+        stock_code: str,
+        config,
+    ) -> Optional[UnifiedRealtimeQuote]:
+        """注册表路由:market 匹配 + priority 升序逐源尝试(flag 开启时)。"""
+        registry_specs = getattr(self, "registry_specs", None)
+        if not isinstance(registry_specs, dict):
+            try:
+                registry_specs = self._registry_specs()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[实时行情] %s 注册表加载失败,降级返回 None: %s", stock_code, exc)
+                return None
+        market = _market_tag(stock_code)
+        candidates = sorted(
+            (
+                spec
+                for spec in registry_specs.values()
+                if "quote" in spec.capabilities and market in spec.markets
+            ),
+            key=lambda spec: spec.priority,
+        )
+        for spec in candidates:
+            quote = self._try_fetcher_quote_spec(spec, stock_code)
+            if quote is not None:
+                logger.info(f"[实时行情] {stock_code} 注册表路由成功 (来源: {spec.name})")
+                return self._enrich_realtime_quote(
+                    quote,
+                    realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
+                )
+        logger.debug(f"[实时行情] {stock_code} 注册表路由无可用数据源")
         return None
 
     def _supplement_quote(self, stock_code: str, primary_quote, fetcher_name: str, **kw):
