@@ -617,19 +617,6 @@ class DataFetcherManager:
     - 所有数据源都失败时抛出异常
     """
 
-    _DAILY_MARKET_FETCHER_SUPPORT = {
-        "EfinanceFetcher": {"cn"},
-        "TencentFetcher": {"cn"},
-        "AkshareFetcher": {"cn", "hk"},
-        "TushareFetcher": {"cn", "hk"},
-        "TickFlowFetcher": {"cn"},
-        "PytdxFetcher": {"cn"},
-        "BaostockFetcher": {"cn"},
-        "YfinanceFetcher": {"cn", "hk", "us", "jp", "kr", "tw"},
-        "LongbridgeFetcher": {"hk", "us"},
-        "FinnhubFetcher": {"us"},
-        "AlphaVantageFetcher": {"us"},
-    }
     # 契约 v2 目标源(提供 to_fundamental):flag 开启时 get_fundamental_context 优先走其适配
     _FUNDAMENTAL_CONTRACT_SOURCES = (
         "AkshareFetcher",
@@ -765,12 +752,22 @@ class DataFetcherManager:
         fetchers: List[BaseFetcher],
         market: str,
     ) -> List[BaseFetcher]:
-        """Skip built-in daily fetchers that are known not to support a market."""
+        """Skip built-in daily fetchers whose registry markets exclude the market.
 
+        注册表(config/fetchers.yaml)为市场支持的唯一事实来源,取代旧硬编码
+        ``_DAILY_MARKET_FETCHER_SUPPORT``;未注册的 fetcher 视为支持(保持原语义)。
+        """
+
+        from data_provider.specs import DEFAULT_REGISTRY_PATH, load_fetcher_specs
+
+        support = {
+            spec.fetcher_class: frozenset(spec.markets)
+            for spec in load_fetcher_specs(DEFAULT_REGISTRY_PATH)
+        }
         kept: List[BaseFetcher] = []
         skipped: List[str] = []
         for fetcher in fetchers:
-            supported = cls._DAILY_MARKET_FETCHER_SUPPORT.get(fetcher.name)
+            supported = support.get(fetcher.name)
             if supported is not None and market not in supported:
                 skipped.append(fetcher.name)
             else:

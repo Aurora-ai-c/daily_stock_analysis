@@ -50,3 +50,99 @@ fetchers:
     env_required: [FINNHUB_API_KEY]
     health_check: null
     version: "1"
+  - name: tencent
+    module: data_provider.tencent_fetcher
+    fetcher_class: TencentFetcher
+    markets: [cn]
+    capabilities: [quote, bar]
+    priority: 5
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: pytdx
+    module: data_provider.pytdx_fetcher
+    fetcher_class: PytdxFetcher
+    markets: [cn]
+    capabilities: [quote, bar]
+    priority: 2
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: efinance
+    module: data_provider.efinance_fetcher
+    fetcher_class: EfinanceFetcher
+    markets: [cn]
+    capabilities: [quote, bar]
+    priority: 0
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: baostock
+    module: data_provider.baostock_fetcher
+    fetcher_class: BaostockFetcher
+    markets: [cn]
+    capabilities: [quote, bar]
+    priority: 3
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: longbridge
+    module: data_provider.longbridge_fetcher
+    fetcher_class: LongbridgeFetcher
+    markets: [hk, us]
+    capabilities: [quote, bar]
+    priority: 5
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: []
+    health_check: null
+    version: "1"
+  - name: tickflow
+    module: data_provider.tickflow_fetcher
+    fetcher_class: TickFlowFetcher
+    markets: [cn]
+    capabilities: [quote, bar]
+    priority: 2
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: [TICKFLOW_API_KEY]
+    health_check: null
+    version: "1"
+  - name: alphavantage
+    module: data_provider.alphavantage_fetcher
+    fetcher_class: AlphaVantageFetcher
+    markets: [us]
+    capabilities: [quote, bar]
+    priority: 3
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: [ALPHAVANTAGE_API_KEY]
+    health_check: null
+    version: "1"
+  - name: tw_institutional
+    module: data_provider.tw_institutional_fetcher
+    fetcher_class: TwInstitutionalFetcher
+    markets: [tw]
+    capabilities: [fundamental]
+    priority: 99
+    enabled: false
+    rate_limit: null
+    timeout: null
+    env_required: []
+    health_check: null
+    version: "1"
