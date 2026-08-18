@@ -1,0 +1,53 @@
+name: Cloud Client Release
+
+on:
+  push:
+    tags:
+      - 'cloud-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag in semver format, e.g. cloud-v0.1.0'
+        required: true
+        type: string
+
+concurrency:
+  group: cloud-client-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install build and runtime dependencies
+        shell: pwsh
+        run: |
+          pip install pyinstaller fastapi uvicorn requests pydantic
+
+      - name: Build dsa-cloud-client (PyInstaller onedir)
+        shell: pwsh
+        run: |
+          & .\apps\dsa-cloud-client\build.ps1
+
+      - name: Verify build artifact
+        shell: pwsh
+        run: |
+          $exe = 'apps/dsa-cloud-client/dist/dsa-cloud-client/dsa-cloud-client.exe'
+          if (-not (Test-Path $exe)) {
+            throw "No dsa-cloud-client.exe found at $exe"
+          }
+          Get-Item $exe | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dsa-cloud-client-windows-${{ github.ref_name }}
+          path: apps/dsa-cloud-client/dist/dsa-cloud-client
+          if-no-files-found: error
