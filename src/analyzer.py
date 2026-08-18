@@ -949,6 +949,12 @@ def fill_price_position_if_needed(
     """Fill missing price_position fields from trend_result / realtime data (in-place)."""
     if not result:
         return
+    # 契约层 Quote → 旧 dataclass 适配(与 pipeline._to_legacy_quote 同语义),
+    # 兼容统一入口返回的契约形状,确保 to_dict() 读取成立。
+    if realtime_quote is not None and not isinstance(realtime_quote, dict):
+        from data_provider.contracts import Quote
+        if isinstance(realtime_quote, Quote):
+            realtime_quote = realtime_quote.legacy_compat()
     try:
         if not result.dashboard:
             result.dashboard = {}

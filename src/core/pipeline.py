@@ -106,6 +106,14 @@ from bot.models import BotMessage
 logger = logging.getLogger(__name__)
 
 
+def _to_legacy_quote(value):
+    """Quote → UnifiedRealtimeQuote 适配;旧 dataclass 原样透传。"""
+    from data_provider.contracts import Quote
+    if isinstance(value, Quote):
+        return value.legacy_compat()
+    return value
+
+
 def _share_image_payload(result: Any) -> Optional[Dict[str, Any]]:
     """Return structured poster data when the result exposes the real contract."""
 
@@ -469,7 +477,9 @@ class StockAnalysisPipeline:
             realtime_quote = None
             try:
                 if self.config.enable_realtime_quote:
-                    realtime_quote = self.fetcher_manager.get_realtime_quote(code, log_final_failure=False)
+                    realtime_quote = _to_legacy_quote(
+                        self.fetcher_manager.get_realtime_quote(code, log_final_failure=False)
+                    )
                     if realtime_quote:
                         # 使用实时行情返回的真实股票名称
                         if realtime_quote.name:
