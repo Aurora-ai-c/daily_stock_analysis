@@ -1,4 +1,5 @@
 # tests/test_fetcher_registry.py
+import yaml
 import pytest
 from data_provider.registry import discover_fetchers, FetcherRegistryError
 from data_provider.specs import FetcherSpec, load_fetcher_specs
@@ -42,6 +43,33 @@ class TestDiscover:
         monkeypatch.setattr("data_provider.registry.load_fetcher_specs", lambda path: specs)
         out = discover_fetchers()
         assert out[0].enabled is True
+
+
+class TestLoadErrors:
+    def test_bad_yaml_wrapped_as_registry_error(self, tmp_path):
+        path = tmp_path / "bad.yaml"
+        path.write_text("fetchers: [unclosed", encoding="utf-8")
+        with pytest.raises(FetcherRegistryError):
+            discover_fetchers(path)
+
+    def test_bad_yaml_chain_preserves_original(self, tmp_path):
+        path = tmp_path / "bad.yaml"
+        path.write_text("fetchers: [unclosed", encoding="utf-8")
+        with pytest.raises(FetcherRegistryError) as excinfo:
+            discover_fetchers(path)
+        assert isinstance(excinfo.value.__cause__, yaml.YAMLError)
+
+    def test_empty_file_returns_no_specs(self, tmp_path):
+        path = tmp_path / "empty.yaml"
+        path.write_text("", encoding="utf-8")
+        assert discover_fetchers(path) == []
+
+    def test_invalid_field_wrapped_as_registry_error(self, tmp_path):
+        path = tmp_path / "invalid.yaml"
+        path.write_text("fetchers:\n  - name: t\n    module: data_provider.contracts\n"
+                        "    fetcher_class: 123\n", encoding="utf-8")
+        with pytest.raises(FetcherRegistryError):
+            discover_fetchers(path)
 
 
 def _health_false() -> bool:
