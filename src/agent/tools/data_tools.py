@@ -490,6 +490,7 @@ def _handle_get_stock_info(stock_code: str) -> dict:
     """Get stock fundamental information through unified fundamental context."""
     manager = _get_fetcher_manager()
     try:
+        # 契约层 Quote:读字段保持 getattr 以容忍缺省
         fundamental_context = manager.get_fundamental_context(stock_code)
     except Exception as e:
         logger.warning(f"get_stock_info via fundamental pipeline failed for {stock_code}: {e}")

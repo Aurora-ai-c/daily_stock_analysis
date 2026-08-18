@@ -263,6 +263,7 @@ class EventMonitor:
     def _fetch_realtime_quote(self, stock_code: str) -> Any:
         from data_provider import DataFetcherManager
 
+        # 契约层 Quote:读字段保持 getattr 以容忍缺省
         return DataFetcherManager().get_realtime_quote(stock_code)
 
     async def _get_realtime_quote(self, stock_code: str) -> Any:
