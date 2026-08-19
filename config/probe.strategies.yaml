@@ -1,0 +1,9 @@
+# config/probe.strategies.yaml
+# 信号探针 v1 最小集:算法实现见 src/services/pipeline/probe.py,此处仅权重配置。
+signals:
+  ma_cross: {weight: 0.3, enabled: true}
+  volume_surge: {weight: 0.2, enabled: true}
+  breakout: {weight: 0.2, enabled: true}
+  pct_movement: {weight: 0.1, enabled: true}
+  fund_flow: {weight: 0.1, enabled: false}   # 依赖数据源,v1 未实现
+  volume_price_divergence: {weight: 0.1, enabled: true}
