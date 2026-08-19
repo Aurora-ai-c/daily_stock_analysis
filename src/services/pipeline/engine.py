@@ -63,7 +63,7 @@ class PipelineEngine:
             else:
                 self._skip_side_effect(run_id, "pusher", replay)
 
-            self.repo.update_step_status(run_id, "run", "completed")
+            self.repo.update_step_status(run_id=run_id, step="run", status="completed")
             self._update_run_record(run_id, status="completed")
         except CollectorHardFailError as exc:
             self._update_run_record(run_id, status="failed", error_summary=str(exc))
