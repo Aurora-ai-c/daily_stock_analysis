@@ -15,7 +15,7 @@ class _FakeManager:
             raise RuntimeError("source unavailable")
         import pandas as pd
         return pd.DataFrame([{"date": "2026-08-14", "open": 1, "high": 2,
-                              "low": 0.5, "close": 1.5, "volume": 100}])
+                              "low": 0.5, "close": 1.5, "volume": 100}]), "fake_fetcher"
 
 
 class TestCollector:

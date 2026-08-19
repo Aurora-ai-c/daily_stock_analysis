@@ -32,7 +32,7 @@ def collect(stock_codes: list[str], markets: list[str],
         try:
             total = 0
             for code in codes:
-                df = manager.get_daily_data(code)
+                df, _ = manager.get_daily_data(code)
                 total += 0 if df is None else len(df)
             rows[market] = total
         except Exception:  # noqa: BLE001
