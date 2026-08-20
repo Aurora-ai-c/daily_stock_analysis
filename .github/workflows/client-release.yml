@@ -1,53 +1,93 @@
-name: Cloud Client Release
+name: client-release
 
 on:
-  push:
-    tags:
-      - 'cloud-v*.*.*'
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing release tag in semver format, e.g. cloud-v0.1.0'
+        description: 'Release tag to build & publish (e.g. v1.2.3)'
         required: true
         type: string
 
+# 同一 tag 重复触发时取消上一次运行
 concurrency:
-  group: cloud-client-release-${{ github.ref }}
+  group: client-release-${{ github.event.inputs.release_tag || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
+    # 上传 release 资产需要写权限
     permissions:
-      contents: read
+      contents: write
     steps:
-      - uses: actions/checkout@v5
+      - name: 检出指定 tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_tag }}
 
-      - uses: actions/setup-python@v6
+      - name: 校验 release 已存在（发布目标是更新已有 release 资产）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view ${{ inputs.release_tag }} --repo Aurora-ai-c/daily_stock_analysis
+
+      - name: 设置 Python
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Install build and runtime dependencies
+      - name: 安装构建依赖
         shell: pwsh
         run: |
-          pip install pyinstaller fastapi uvicorn requests pydantic
+          pip install pyinstaller fastapi "uvicorn[standard]" requests pydantic packaging
 
-      - name: Build dsa-cloud-client (PyInstaller onedir)
-        shell: pwsh
-        run: |
-          & .\apps\dsa-cloud-client\build.ps1
+      - name: 同步版本单源（_version.py + version_info.txt）
+        run: python tools/sync_version.py ${{ inputs.release_tag }}
 
-      - name: Verify build artifact
+      - name: 构建 dsa_client.exe（onefile）
+        shell: pwsh
+        working-directory: apps/dsa-cloud-client
+        run: |
+          pyinstaller --noconfirm --clean --onefile --name dsa_client `
+            --version-file version_info.txt `
+            --add-data "static;static" `
+            --hidden-import uvicorn.logging `
+            --hidden-import uvicorn.loops.auto `
+            --hidden-import uvicorn.protocols.http.h11_auto `
+            --hidden-import uvicorn.protocols.websockets.auto `
+            --collect-submodules dsa_client `
+            app.py
+
+      - name: 构建 updater.exe（onefile）
+        shell: pwsh
+        working-directory: apps/dsa-cloud-client
+        run: pyinstaller --noconfirm --clean --onefile --name updater updater_entry.py
+
+      - name: 生成 updates.json（合并去重该 version）
         shell: pwsh
         run: |
-          $exe = 'apps/dsa-cloud-client/dist/dsa-cloud-client/dsa-cloud-client.exe'
-          if (-not (Test-Path $exe)) {
-            throw "No dsa-cloud-client.exe found at $exe"
+          $v = "${{ inputs.release_tag }}".TrimStart("v")
+          $exe = "apps/dsa-cloud-client/dist/dsa_client.exe"
+          $updater = "apps/dsa-cloud-client/dist/updater.exe"
+          foreach ($f in @($exe, $updater)) {
+            if (-not (Test-Path $f)) { throw "构建产物缺失: $f" }
           }
-          Get-Item $exe | Format-Table Name, Length
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $json = @{ schema_version = 1; updates = @() }
+          try {
+            $existing = Invoke-RestMethod "https://github.com/Aurora-ai-c/daily_stock_analysis/releases/latest/download/updates.json" -TimeoutSec 30
+            $json.updates = @($existing.updates | Where-Object { $_ -and $_.version -ne $v })
+            Write-Host "合并已有 updates.json，条目数: $($json.updates.Count)"
+          } catch {
+            Write-Host "无现有 updates.json 资产，新建"
+          }
+          $json.updates += @{ version = $v; platform = "win"; arch = "x64"; channel = "stable";
+                              url = "https://github.com/Aurora-ai-c/daily_stock_analysis/releases/download/${{ inputs.release_tag }}/dsa_client.exe";
+                              sha256 = $sha; notes = "auto" }
+          $json | ConvertTo-Json -Depth 5 | Set-Content updates.json -Encoding utf8
+          Write-Host "--- updates.json ---"
+          Get-Content updates.json
 
-      - uses: actions/upload-artifact@v6
-        with:
-          name: dsa-cloud-client-windows-${{ github.ref_name }}
-          path: apps/dsa-cloud-client/dist/dsa-cloud-client
-          if-no-files-found: error
+      - name: 发布构建产物与 updates.json 到 release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ inputs.release_tag }} apps/dsa-cloud-client/dist/dsa_client.exe apps/dsa-cloud-client/dist/updater.exe updates.json --repo Aurora-ai-c/daily_stock_analysis --clobber
