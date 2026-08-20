@@ -71,7 +71,17 @@ class TestCache:
         assert "version" not in data  # 缓存键为 latest,不是 version
         second = check_for_update(cache_file=str(cache))
         assert second.cached is True and second.latest == "9.9.9"
+        assert second.update_available is True  # 缓存版本 9.9.9 > current
         assert second.url == "u2" and second.sha256 == "b"
+
+    def test_cache_hit_latest_not_newer(self, tmp_path):
+        # 缓存版本 <= 当前版本(用户已手动升级)时,命中仍 cached=True 但 available=False
+        cache = tmp_path / "c.json"
+        cache.write_text(json.dumps({"checked_at": "2999-01-01T00:00:00Z",
+                                     "latest": "0.0.1", "url": "u", "sha256": "s"}),
+                         encoding="utf-8")
+        result = check_for_update(cache_file=str(cache))
+        assert result.cached is True and result.update_available is False
 
     def test_stale_cache_refetches(self, tmp_path, monkeypatch):
         monkeypatch.setattr(updater, "fetch_updates_json", self._payload)

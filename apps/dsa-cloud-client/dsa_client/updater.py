@@ -75,10 +75,13 @@ def check_for_update(cache_file: Optional[str] = None) -> "CheckResult":
             age = time.time() - datetime.fromisoformat(
                 cached["checked_at"].replace("Z", "+00:00")).timestamp()
             if age < CACHE_TTL_SECONDS:
-                return CheckResult(update_available=True, current=get_version(),
-                                   latest=cached["latest"], url=cached["url"],
-                                   sha256=cached["sha256"], notes=cached.get("notes"),
-                                   cached=True)
+                # 缓存命中仍 trusted(24h 窗口),但 available 需复核:用户可能已手动升到更高版本
+                return CheckResult(
+                    update_available=Version(cached["latest"]) > Version(get_version()),
+                    current=get_version(),
+                    latest=cached["latest"], url=cached["url"],
+                    sha256=cached["sha256"], notes=cached.get("notes"),
+                    cached=True)
         except (KeyError, ValueError, OSError):
             pass
     try:
