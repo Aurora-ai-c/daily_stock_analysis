@@ -89,7 +89,10 @@ def check_for_update(cache_file: Optional[str] = None) -> "CheckResult":
         now = datetime.now(timezone.utc).isoformat()
         if chosen:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps({"checked_at": now, **chosen}),
+            cache_path.write_text(json.dumps({"checked_at": now,
+                                               "latest": chosen["version"],
+                                               "url": chosen["url"],
+                                               "sha256": chosen["sha256"]}),
                                   encoding="utf-8")
             return CheckResult(update_available=True, current=get_version(),
                                latest=chosen["version"], url=chosen["url"],
