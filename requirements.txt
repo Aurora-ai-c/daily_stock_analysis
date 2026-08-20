@@ -72,3 +72,6 @@ jinja2>=3.1.0               # Jinja2 template engine for report rendering
 fastapi>=0.109.0            # Modern Python Web framework
 uvicorn[standard]>=0.27.0   # ASGI server
 python-multipart>=0.0.6     # FastAPI File/Form upload support
+
+# MCP server
+mcp==1.2.1                  # MCP SDK; pinned exact for the embedded /mcp tool layer
