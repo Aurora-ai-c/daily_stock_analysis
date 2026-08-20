@@ -28,6 +28,7 @@ def test_flag_env_on(monkeypatch):
 def test_market_review_flag_on_runs_pipeline_v2(tmp_path, monkeypatch):
     """flag 开时 market_review 触发端点走 PipelineEngine:run_id + 产物 + 两表落库。"""
     try:
+        from api.v1.endpoints import analysis as analysis_endpoint_module
         from api.v1.endpoints.analysis import trigger_market_review
         from api.v1.schemas.analysis import MarketReviewRequest
     except Exception:  # pragma: no cover - optional dependency environments
@@ -35,6 +36,9 @@ def test_market_review_flag_on_runs_pipeline_v2(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "smoke.db"))
     monkeypatch.setenv("PIPELINE_V2_ENABLED", "true")
+    # 显式固化 STOCK_LIST,避免依赖环境/.env 链导致测试走向真实网络;
+    # 取固定非空值而非空串:空串会让 collector 跳过 manager 调用,使下方 stub 生效断言无法成立
+    monkeypatch.setenv("STOCK_LIST", "600519")
     Config.reset_instance()
     from src.storage import DatabaseManager
     DatabaseManager.reset_instance()
@@ -43,15 +47,22 @@ def test_market_review_flag_on_runs_pipeline_v2(tmp_path, monkeypatch):
     assert config.pipeline_v2_enabled is True
 
     class _StubManager:
+        calls = 0
+
         def get_daily_data(self, code, **kw):
+            _StubManager.calls += 1
             return None, "stub"
 
     try:
-        with patch("data_provider.base.DataFetcherManager", return_value=_StubManager()):
+        with patch("api.v1.endpoints.analysis.DataFetcherManager", new=_StubManager):
             response = trigger_market_review(
                 request=MarketReviewRequest(send_notification=False),
                 config=config,
             )
+            # stub 必须安装在端点模块的真实绑定点上(经 from ... import 绑定),
+            # 且被 collector 实际消费,否则为死代码
+            assert analysis_endpoint_module.DataFetcherManager is _StubManager
+            assert _StubManager.calls >= 1
         assert response.status_code == 202, response.body
         payload = json.loads(response.body)
         assert payload.get("pipeline_v2") is True
