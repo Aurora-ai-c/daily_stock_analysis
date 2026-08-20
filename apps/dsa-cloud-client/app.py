@@ -16,6 +16,7 @@ import uvicorn
 
 from dsa_client import config as cfg
 from dsa_client.server import create_app
+from dsa_client.update_thread import start_update_check_thread
 
 PORT_MIN, PORT_MAX = 49152, 65535
 
@@ -74,6 +75,8 @@ def main(argv=None) -> int:
             webbrowser.open(url)
         except Exception:  # noqa: BLE001
             print("⚠️ 无法自动打开浏览器,请手动访问: " + url)
+
+    start_update_check_thread()
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0
