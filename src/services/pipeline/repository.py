@@ -8,7 +8,20 @@ from typing import List, Optional
 from sqlalchemy import select
 
 from src.services.pipeline.models import PipelineRun, PipelineStep
-from src.storage import DatabaseManager
+from src.storage import Base, DatabaseManager
+
+
+def ensure_pipeline_tables(manager: Optional[DatabaseManager] = None) -> None:
+    """确保 pipeline_runs / pipeline_steps 两表在既有库中存在。
+
+    DatabaseManager.create_all 只在构造时执行一次;若构造早于
+    src.services.pipeline.models 的 import,两表不会在建表批次内,
+    接线时必须显式补建(幂等)。
+    """
+    db = manager or DatabaseManager.get_instance()
+    import src.services.pipeline.models as _models  # noqa: F401  确保模型注册到共享 Base
+
+    Base.metadata.create_all(db._engine)
 
 
 def _utc_now_iso() -> str:
@@ -119,6 +132,48 @@ class PipelineRepository:
             return session.execute(
                 select(PipelineRun).where(PipelineRun.run_id == run_id).limit(1)
             ).scalar_one_or_none()
+
+    def update_run_status(
+        self,
+        *,
+        run_id: str,
+        status: str,
+        error_summary: Optional[str] = None,
+        completed_at: Optional[str] = None,
+    ) -> Optional[PipelineRun]:
+        """更新 run 的状态字段(status 必更新;error_summary/completed_at 仅在传入时写入)。"""
+        with self.db.get_session() as session:
+            run = session.execute(
+                select(PipelineRun).where(PipelineRun.run_id == run_id).limit(1)
+            ).scalar_one_or_none()
+            if run is None:
+                return None
+            run.status = status
+            if error_summary is not None:
+                run.error_summary = error_summary
+            if completed_at is not None:
+                run.completed_at = completed_at
+            session.commit()
+            return run
+
+    def superseded_chain_length(self, *, mode: str, date: str) -> int:
+        """返回指定 mode/date 下 superseded 链的长度(节点数,沿 superseded_by 追溯,防环)。"""
+        with self.db.get_session() as session:
+            rows = session.execute(
+                select(PipelineRun)
+                .where(PipelineRun.mode == mode, PipelineRun.date == date)
+            ).scalars().all()
+            by_id = {r.run_id: r for r in rows}
+            length = 0
+            for run in rows:
+                visited: set[str] = set()
+                cur = run
+                while cur.superseded_by and cur.superseded_by in by_id \
+                        and cur.superseded_by not in visited:
+                    visited.add(cur.superseded_by)
+                    cur = by_id[cur.superseded_by]
+                    length = max(length, len(visited) + 1)
+            return length
 
     def add_step(
         self,

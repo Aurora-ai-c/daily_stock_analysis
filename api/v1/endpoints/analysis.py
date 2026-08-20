@@ -54,7 +54,7 @@ from api.v1.schemas.history import (
     ReportDetails,
 )
 from api.v1.schemas.run_flow import RunFlowSnapshot
-from data_provider.base import canonical_stock_code, normalize_stock_code
+from data_provider.base import DataFetcherManager, canonical_stock_code, normalize_stock_code
 from src.data.stock_index_loader import resolve_index_stock_code
 from src.config import Config
 from src.core.market_review_lock import (
@@ -518,6 +518,42 @@ def _handle_sync_analysis(
 # POST /market-review - 触发大盘复盘
 # ============================================================
 
+def _build_pipeline_v2_engine(config: Config, *, manager=None) -> Any:
+    """构建 v2 管线引擎:补建表 → 仓储(全局 DatabaseManager)→ runs_dir → 采集管理器。
+
+    runs_dir 沿用既有 data 目录约定:<db 父目录>/pipeline/runs。
+    """
+    from src.services.pipeline.repository import PipelineRepository, ensure_pipeline_tables
+    from src.services.pipeline.engine import PipelineEngine
+
+    ensure_pipeline_tables()
+    repo = PipelineRepository()
+    runs_dir = Path(config.database_path).parent / "pipeline" / "runs"
+    manager = manager or DataFetcherManager()
+    return PipelineEngine(repo=repo, runs_dir=runs_dir, manager=manager)
+
+
+def _run_pipeline_v2(config: Config, *, manager=None) -> JSONResponse:
+    """flag 开时同步跑五步管线并返回 202 + run_id(新管线不走任务队列)。"""
+    from src.services.pipeline.engine import ReplayMode
+
+    logger.info("[MarketReview] component=pipeline_v2 action=submit trigger_source=api")
+    engine = _build_pipeline_v2_engine(config, manager=manager)
+    try:
+        run_id = engine.run(
+            mode="market_review",
+            date=datetime.now().strftime("%Y-%m-%d"),
+            stock_codes=list(config.stock_list or []),
+            replay=ReplayMode.FORWARD_ONLY,
+            force=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[MarketReview] component=pipeline_v2 action=failed", exc_info=True)
+        raise api_error(500, "pipeline_v2_failed", f"v2 管线执行失败: {exc}") from exc
+    logger.info("[MarketReview] component=pipeline_v2 action=accepted run_id=%s", run_id)
+    return JSONResponse(status_code=202,
+                        content={"run_id": run_id, "pipeline_v2": True})
+
 @router.post(
     "/market-review",
     response_model=MarketReviewAccepted,
@@ -538,6 +574,11 @@ def trigger_market_review(
     request = request or MarketReviewRequest()
 
     runtime_config = _with_request_report_language(config, request.report_language)
+
+    # v2 五步管线 flag(Part B):开启时直接同步执行新管线,不再入任务队列
+    if getattr(runtime_config, "pipeline_v2_enabled", False):
+        return _run_pipeline_v2(runtime_config)
+
     effective_region = request.region or (
         normalize_market_review_region_lenient(runtime_config.market_review_region) or "cn"
     )
