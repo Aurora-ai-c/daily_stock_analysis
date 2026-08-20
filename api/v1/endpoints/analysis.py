@@ -534,15 +534,21 @@ def _build_pipeline_v2_engine(config: Config, *, manager=None) -> Any:
 
 
 def _run_pipeline_v2(config: Config, *, manager=None) -> JSONResponse:
-    """flag 开时同步跑五步管线并返回 202 + run_id(新管线不走任务队列)。"""
+    """flag 开时同步跑五步管线并返回 202 + run_id(新管线不走任务队列)。
+
+    并发去重(用户裁定):同 (mode,date) 已有 active run 时 engine 只复用其 run_id 不重跑,
+    响应体附 reused: true 以便区分。
+    """
     from src.services.pipeline.engine import ReplayMode
 
     logger.info("[MarketReview] component=pipeline_v2 action=submit trigger_source=api")
     engine = _build_pipeline_v2_engine(config, manager=manager)
+    date = datetime.now().strftime("%Y-%m-%d")
+    reused = engine.repo.find_active_run(mode="market_review", date=date) is not None
     try:
         run_id = engine.run(
             mode="market_review",
-            date=datetime.now().strftime("%Y-%m-%d"),
+            date=date,
             stock_codes=list(config.stock_list or []),
             replay=ReplayMode.FORWARD_ONLY,
             force=False,
@@ -550,9 +556,12 @@ def _run_pipeline_v2(config: Config, *, manager=None) -> JSONResponse:
     except Exception as exc:  # noqa: BLE001
         logger.error("[MarketReview] component=pipeline_v2 action=failed", exc_info=True)
         raise api_error(500, "pipeline_v2_failed", f"v2 管线执行失败: {exc}") from exc
-    logger.info("[MarketReview] component=pipeline_v2 action=accepted run_id=%s", run_id)
-    return JSONResponse(status_code=202,
-                        content={"run_id": run_id, "pipeline_v2": True})
+    logger.info("[MarketReview] component=pipeline_v2 action=accepted run_id=%s reused=%s",
+                run_id, reused)
+    content = {"run_id": run_id, "pipeline_v2": True}
+    if reused:
+        content["reused"] = True
+    return JSONResponse(status_code=202, content=content)
 
 @router.post(
     "/market-review",

@@ -47,6 +47,12 @@ class PipelineEngine:
     def run(self, mode: str, date: str, stock_codes: list[str],
             replay: ReplayMode = ReplayMode.FORWARD_ONLY,
             force: bool = False, run_id: Optional[str] = None) -> str:
+        # 并发去重(用户裁定):非 force 且同 (mode,date) 已有 active run → 只返回其 run_id,
+        # 不重跑五步、不追加 step 行、不重复推送(等同旧路径 409 去重)
+        if run_id is None and not force:
+            active = self.repo.find_active_run(mode=mode, date=date)
+            if active is not None:
+                return active.run_id
         run_id = self._prepare_run(mode=mode, date=date, replay=replay,
                                    force=force, run_id=run_id)
         artifact_dir = self.runs_dir / run_id
@@ -138,7 +144,10 @@ class PipelineEngine:
 
     def _prepare_run(self, *, mode: str, date: str, replay: ReplayMode,
                      force: bool, run_id: Optional[str]) -> str:
-        """确定本次执行的 run_id 并初始化/复用 run 记录(并发锁 + 重放语义)。"""
+        """确定本次执行的 run_id 并初始化 run 记录(重放语义 + force 新建)。
+
+        非 force 复用已在 run() 入口提前返回,此处仅处理 run_id 重放与新建路径。
+        """
         if run_id is not None:
             existing = self.repo.get_run(run_id)
             if existing is None:
@@ -153,8 +162,6 @@ class PipelineEngine:
             return run_id
 
         active = self.repo.find_active_run(mode=mode, date=date)
-        if active is not None and not force:
-            return active.run_id
         new_run_id = uuid.uuid4().hex
         if active is not None and force:
             chain_len = self.repo.superseded_chain_length(mode=mode, date=date)

@@ -61,8 +61,10 @@ class _FakeRepo:
 class _FakeManager:
     def __init__(self, ok=True):
         self.ok = ok
+        self.calls = 0
 
     def get_daily_data(self, code, **kw):
+        self.calls += 1
         if not self.ok:
             raise RuntimeError("down")
         import pandas as pd
@@ -103,10 +105,29 @@ class TestEngine:
     def test_active_run_reused_without_force(self, tmp_path):
         repo = _FakeRepo()
         repo.active = SimpleNamespace(run_id="existing-1")
-        engine = PipelineEngine(repo=repo, runs_dir=tmp_path, manager=_FakeManager())
+        manager = _FakeManager()
+        engine = PipelineEngine(repo=repo, runs_dir=tmp_path, manager=manager)
         run_id = engine.run(mode="full", date="2026-08-16", stock_codes=["600519"])
         assert run_id == "existing-1"
-        assert "existing-1" not in repo.runs
+        assert repo.steps == []       # 不执行任何步骤(不 add_step)
+        assert manager.calls == 0     # collector 未被调用
+        assert "existing-1" not in repo.runs  # 不新建 run 记录
+
+    def test_reused_active_run_does_not_push(self, tmp_path):
+        repo = _FakeRepo()
+        repo.active = SimpleNamespace(run_id="existing-1")
+
+        class _BadChannel:
+            name = "bad"
+
+            def send(self, payload):
+                raise AssertionError("复用路径不应推送")
+
+        engine = PipelineEngine(repo=repo, runs_dir=tmp_path, manager=_FakeManager(),
+                                channels=[_BadChannel()])
+        run_id = engine.run(mode="full", date="2026-08-16", stock_codes=["600519"])
+        assert run_id == "existing-1"
+        assert repo.steps == []
 
     def test_force_supersedes_active_run(self, tmp_path):
         repo = _FakeRepo()

@@ -79,6 +79,17 @@ def test_market_review_flag_on_runs_pipeline_v2(tmp_path, monkeypatch):
         assert len(steps) == 5
         runs_dir = Path(config.database_path).parent / "pipeline" / "runs"
         assert (runs_dir / run_id / "report.md").exists()
+
+        # 并发去重(用户裁定):同 (mode,date) 已有 active run → 复用 run_id,不重跑、不追加 step 行
+        with patch("api.v1.endpoints.analysis.DataFetcherManager", new=_StubManager):
+            response2 = trigger_market_review(
+                request=MarketReviewRequest(send_notification=False),
+                config=config,
+            )
+        payload2 = json.loads(response2.body)
+        assert payload2["run_id"] == run_id
+        assert payload2.get("reused") is True
+        assert len(repo.steps_for(run_id)) == 5
     finally:
         DatabaseManager.reset_instance()
         Config.reset_instance()
