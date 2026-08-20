@@ -25,6 +25,12 @@ jobs:
         with:
           ref: ${{ inputs.release_tag }}
 
+      - name: 校验仓库身份（防 fork 误跑浪费构建）
+        if: github.repository != 'Aurora-ai-c/daily_stock_analysis'
+        run: |
+          echo "此 workflow 仅可在 Aurora-ai-c/daily_stock_analysis 上运行（当前: ${{ github.repository }}）"
+          exit 1
+
       - name: 校验 release 已存在（发布目标是更新已有 release 资产）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,6 +56,7 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --name dsa_client `
             --version-file version_info.txt `
             --add-data "static;static" `
+            --add-data "dsa_client/_version.py;dsa_client" `
             --hidden-import uvicorn.logging `
             --hidden-import uvicorn.loops.auto `
             --hidden-import uvicorn.protocols.http.h11_auto `
@@ -78,7 +85,7 @@ jobs:
             $json.updates = @($existing.updates | Where-Object { $_ -and $_.version -ne $v })
             Write-Host "合并已有 updates.json，条目数: $($json.updates.Count)"
           } catch {
-            Write-Host "无现有 updates.json 资产，新建"
+            Write-Host "拉取现有 updates.json 失败（将新建）: $_"
           }
           $json.updates += @{ version = $v; platform = "win"; arch = "x64"; channel = "stable";
                               url = "https://github.com/Aurora-ai-c/daily_stock_analysis/releases/download/${{ inputs.release_tag }}/dsa_client.exe";
