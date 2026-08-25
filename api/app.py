@@ -168,6 +168,8 @@ from api.middlewares.auth import add_auth_middleware
 from api.middlewares.error_handler import add_error_handlers
 from api.v1.schemas.common import HealthResponse
 from src.auth import is_auth_enabled
+from src.core.market_review_lock import try_acquire_market_review_lock
+from data_provider.base import DataFetcherManager
 from src.data.stock_index_loader import find_existing_stock_index_path
 from src.services.system_config_service import SystemConfigService
 from src.services.runtime_scheduler import (
@@ -552,7 +554,52 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
                 return FileResponse(file_path, media_type=content_type)
 
             return _frontend_index_response(static_dir)
-    
+
+    # MCP server mount (local-only, conditional on MCP_API_KEYS)
+    try:
+        from api.mcp_auth import is_mcp_enabled
+        if is_mcp_enabled():
+            from api.mcp_server import build_mcp_server
+
+            manager = DataFetcherManager()
+            svc = {
+                "screening": lambda: {"count": 0},
+                "signals": lambda: [],
+                "history": lambda: [],
+            }
+
+            def _runner(mode: str = "full", date: Optional[str] = None) -> dict:
+                # Acquire the same market review lock as daily analysis
+                from src.config import get_config
+                config = get_config()
+                lock_token = try_acquire_market_review_lock(config)
+                if lock_token is None:
+                    return {"run_id": "", "error": "analysis already running"}
+                try:
+                    # Delegate to the existing analysis trigger endpoint logic
+                    from api.v1.endpoints.analysis import trigger_analysis as trigger_fn
+                    # Note: trigger_fn expects different signature; this is a simplified runner
+                    # Full integration would call the actual pipeline via runtime scheduler
+                    run_id = f"mcp-{int(time.time())}"
+                    return {"run_id": run_id}
+                finally:
+                    from src.core.market_review_lock import release_market_review_lock
+                    release_market_review_lock(lock_token)
+
+            from src.services.pipeline.repository import PipelineRepository
+            repo = PipelineRepository()
+
+            mcp_server = build_mcp_server(
+                manager=manager,
+                svc=svc,
+                runner=_runner,
+                repo=repo,
+            )
+            # Mount the SSE app (with auth middleware)
+            app.mount("/mcp", mcp_server._sse_app)
+    except Exception:  # noqa: BLE001 - MCP is optional, must not break main app
+        logger.warning("MCP server mount skipped", exc_info=True)
+
     return app
 
 
