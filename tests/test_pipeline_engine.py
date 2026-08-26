@@ -187,3 +187,59 @@ class TestEngine:
         assert "push failed" in steps["pusher"]["degraded_reasons"]
         assert steps["collector"]["status"] == "ok"
         assert steps["renderer"]["status"] == "ok"
+class TestWiring:
+    """I-2 生产链贯通:collector bars → probe 信号 → 报告章节。"""
+
+    @staticmethod
+    def _signal_manager():
+        import pandas as pd
+
+        closes = [10.0] * 24 + [12.0]
+        volumes = [100] * 24 + [400]
+
+        class _Mgr:
+            def get_daily_data(self, code, **kw):
+                df = pd.DataFrame({
+                    "date": [f"2026-08-{i:02d}" for i in range(1, 26)],
+                    "open": closes, "high": [c + 0.5 for c in closes],
+                    "low": [c - 0.5 for c in closes], "close": closes,
+                    "volume": volumes,
+                })
+                return (df, "fake")
+
+        return _Mgr()
+
+    def test_probe_receives_real_bars(self, tmp_path):
+        repo = _FakeRepo()
+        engine = PipelineEngine(repo=repo, runs_dir=tmp_path,
+                                manager=self._signal_manager())
+        run_id = engine.run(mode="full", date="2026-08-16", stock_codes=["600519"])
+        assert repo.runs[run_id]["status"] == "completed"
+        steps = {s["step"]: s for s in repo.steps}
+        # collector 与 probe 均 ok(而非 degraded)
+        assert steps["collector"]["status"] == "ok"
+        assert steps["probe"]["status"] == "ok"
+        # probe artifact 落盘且含真实信号
+        import json
+        from pathlib import Path
+
+        art_files = sorted(Path(tmp_path / run_id).glob("step_*_probe.json"))
+        assert art_files, "probe artifact must be persisted"
+        art = json.loads(art_files[0].read_text(encoding="utf-8"))
+        assert "600519" in art["candidates"]
+        names = {s["signal"] for s in art["signals"]}
+        assert {"ma_cross", "volume_surge", "breakout"} <= names
+
+    def test_report_contains_structured_sections(self, tmp_path):
+        from pathlib import Path
+
+        repo = _FakeRepo()
+        engine = PipelineEngine(repo=repo, runs_dir=tmp_path,
+                                manager=self._signal_manager())
+        run_id = engine.run(mode="full", date="2026-08-16", stock_codes=["600519"])
+        report = (Path(tmp_path) / run_id / "report.md").read_text(encoding="utf-8")
+        assert f"DSA 管线报告 full 2026-08-16" in report
+        assert "## 数据采集 (collector)" in report
+        assert "## 信号探针 (probe)" in report
+        assert "## 交叉验证 (validated)" in report
+        assert '"resolution"' in report

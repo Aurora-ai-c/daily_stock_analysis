@@ -74,11 +74,13 @@ class PipelineEngine:
         seq = self._persist(artifact_dir, "collector", collector_art, seq, run_id,
                             latency_ms=int((time.monotonic() - start) * 1000))
 
-        # 步骤 2:probe —— soft-fail(异常记录 degraded 后继续)
+        # 步骤 2:probe —— soft-fail(异常记录 degraded 后继续);真实消费 collector 的 bars
         probe_art: Optional[ProbeArtifact] = None
         try:
             start = time.monotonic()
-            probe_art = probe(collector_art.rows.keys() and stock_codes, {}, {})
+            bars_by_code = collector_art.bars_by_code or {}
+            codes_with_bars = list(bars_by_code) or list(stock_codes)
+            probe_art = probe(codes_with_bars, bars_by_code, {})
         except Exception as exc:  # noqa: BLE001
             self._degraded(run_id, "probe", exc,
                            latency_ms=int((time.monotonic() - start) * 1000))
@@ -100,11 +102,37 @@ class PipelineEngine:
             seq = self._persist(artifact_dir, "cross_validator", validated, seq, run_id,
                                 latency_ms=int((time.monotonic() - start) * 1000))
 
-        # 步骤 4:renderer —— soft-fail
+        # 步骤 4:renderer —— soft-fail;结构化 payload(采集/探针/验证 → markdown 章节)
         rendered: Optional[RendererArtifact] = None
         try:
             start = time.monotonic()
-            rendered = render_report(artifact_dir, {"title": f"{mode} {date}"})
+            payload: dict = {
+                "title": f"DSA 管线报告 {mode} {date}",
+                "mode": mode,
+                "date": date,
+                "stocks": list(stock_codes),
+                "collector": {
+                    "rows": collector_art.rows,
+                    "missing_markets": collector_art.missing_markets,
+                    "fetchers_used": collector_art.fetchers_used,
+                    "latency": collector_art.latency,
+                    "codes_with_bars": sorted(collector_art.bars_by_code),
+                },
+            }
+            if probe_art is not None:
+                payload["probe"] = {
+                    "candidates": probe_art.candidates,
+                    "probe_score": probe_art.probe_score,
+                    "signals": [s.model_dump() for s in probe_art.signals],
+                }
+            if validated is not None:
+                payload["validated"] = {
+                    "confirm": validated.confirm,
+                    "conflict": validated.conflict,
+                    "resolution": validated.resolution,
+                    "signal_count": len(validated.signals),
+                }
+            rendered = render_report(artifact_dir, payload)
         except Exception as exc:  # noqa: BLE001
             self._degraded(run_id, "renderer", exc,
                            latency_ms=int((time.monotonic() - start) * 1000))
