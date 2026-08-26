@@ -33,13 +33,11 @@ def params_hash(params: dict) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-@require_scope("read:basic")
 def query_quote(code: str, market: str, manager=None) -> Quote:
     raw = manager.get_realtime_quote(code, market)
     return Quote(code=code, market=market, price=raw["price"])
 
 
-@require_scope("read:basic")
 def query_bar_history(code: str, market: str, days: int = 60, manager=None) -> list[Bar]:
     df = manager.get_daily_data(code, days=days)
     if df is None:
@@ -49,33 +47,27 @@ def query_bar_history(code: str, market: str, days: int = 60, manager=None) -> l
             for r in df.tail(days).to_dict("records")]
 
 
-@require_scope("read:sensitive")
 def query_fundamental(code: str, market: str, manager=None) -> FundamentalRaw:
     raw = manager.get_fundamental_data(code, market)
     return FundamentalRaw(**raw)
 
 
-@require_scope("read:status")
 def get_screening_summary(svc=None) -> dict:
     return (svc or {}).get("screening", lambda: {"count": 0})()
 
 
-@require_scope("read:status")
 def get_signal_history(code: str, limit: int = 10, svc=None) -> list[dict]:
     return (svc or {}).get("signals", lambda: [])()
 
 
-@require_scope("read:status")
 def list_analysis_history(limit: int = 10, svc=None) -> list[dict]:
     return (svc or {}).get("history", lambda: [])()
 
 
-@require_scope("write:trigger")
 def trigger_analysis(mode: str = "full", date: Optional[str] = None, runner=None) -> dict:
     return runner(mode=mode, date=date)
 
 
-@require_scope("read:status")
 def get_pipeline_status(repo=None) -> dict:
     return {"enabled": repo is not None}
 
