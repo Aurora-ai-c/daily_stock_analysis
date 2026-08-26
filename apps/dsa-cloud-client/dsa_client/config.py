@@ -100,7 +100,14 @@ class Config:
         self.pat_enc = dpapi_encrypt(plaintext)
 
     def get_pat(self) -> str:
-        return dpapi_decrypt(self.pat_enc)
+        """未配置或 DPAPI 解密失败(跨用户/机器迁移、blob 损坏/非 base64)时返回空串。"""
+        if not self.pat_enc:
+            return ""
+        try:
+            return dpapi_decrypt(self.pat_enc)
+        except (OSError, ValueError):
+            # OSError: CryptUnprotectData 失败;ValueError(binascii.Error 等): blob 非 base64 或解密结果非 UTF-8
+            return ""
 
     def validate(self) -> list[str]:
         missing = []

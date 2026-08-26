@@ -40,7 +40,14 @@ class FakeGit:
 
 
 def _make():
-    cfg = cfg_mod.Config()
+    class _CfgWithPat(cfg_mod.Config):
+        """测试替身:真实解密失败时回退占位(绕开 DPAPI 平台限制与垃圾 blob)。"""
+
+        def get_pat(self):
+            pat = super().get_pat()
+            return pat or ("pat-ok" if self.pat_enc else "")
+
+    cfg = _CfgWithPat()
     cfg.owner = "alice"
     cfg.repo = "dsa-cloud-alice"
     cfg.token = "tok123"
@@ -110,3 +117,45 @@ def test_login_requires_origin_header():
     client, _, _ = _make()
     assert client.post("/api/login?token=tok123",
                        json={"owner": "bob", "repo": "r", "pat": "p"}).status_code == 403
+class TestStateWithoutPat:
+    """回归:未配置 PAT 时 /api/state 不得 500(空 pat_enc/损坏 blob → 引导登录)。"""
+
+    def _client(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        import dsa_client.config as cfg_mod
+        import dsa_client.server as srv_mod
+
+        monkeypatch.setattr(cfg_mod, "config_path", lambda: tmp_path / "config.json")
+
+        class _StubClient:
+            def __init__(self, pat):
+                self.pat = pat
+
+            def get_runs(self, owner, repo):
+                return []
+
+        cfg = cfg_mod.Config()
+        cfg.token = "t"
+        app = srv_mod.create_app(cfg, client_factory=lambda c: _StubClient(c.get_pat()))
+        return TestClient(app), cfg
+
+    def test_state_ok_when_pat_missing(self, tmp_path, monkeypatch):
+        client, cfg = self._client(tmp_path, monkeypatch)
+        r = client.get("/api/state?token=t")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["logged_in"] is False
+        assert body["pat_configured"] is False
+        assert body["needs_login"] is True
+
+    def test_state_ok_when_blob_corrupted(self, tmp_path, monkeypatch):
+        client, cfg = self._client(tmp_path, monkeypatch)
+        cfg.owner = "o"
+        cfg.repo = "r"
+        cfg.pat_enc = "not-a-valid-blob"
+        r = client.get("/api/state?token=t")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["pat_configured"] is False
+        assert body["logged_in"] is False

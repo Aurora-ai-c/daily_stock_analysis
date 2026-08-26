@@ -77,15 +77,19 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
     def state(request: Request):
         if not _guard(request):
             return JSONResponse({"error": "forbidden"}, status_code=403)
-        git = git_factory(config)
-        logged_in = bool(config.owner and config.repo)
+        pat = config.get_pat()
+        logged_in = bool(config.owner and config.repo and pat)
         running = False
         if logged_in:
             try:
+                git = git_factory(config)
                 running = gc.is_running(git.get_runs(config.owner, config.repo))
             except Exception:
                 running = False
-        return {"owner": config.owner, "repo": config.repo, "logged_in": logged_in, "running": running}
+        return {"owner": config.owner, "repo": config.repo, "logged_in": logged_in,
+                "running": running,
+                "pat_configured": bool(pat),
+                "needs_login": not (config.owner and config.repo and pat)}
 
     @app.get("/api/watchlist")
     def watchlist(request: Request):
