@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PIPELINE_V2_ENABLED flag 接线测试:flag 默认关闭 / env 开启 / 触发端点走新管线。"""
+"""PIPELINE_V2_ENABLED flag 接线测试:flag 默认开启 / env 可关 / 触发端点走新管线。"""
 
 import json
 import os
@@ -11,18 +11,18 @@ import pytest
 from src.config import Config
 
 
-def test_flag_defaults_off(monkeypatch):
-    """flag 默认关闭:裸 Config() 走 dataclass 默认值 False(旧路径不变)。"""
+def test_flag_defaults_on(monkeypatch):
+    """flag 默认开启(用户裁定 2026-08-26);PIPELINE_V2_ENABLED=false 回退旧路径。"""
     monkeypatch.delenv("PIPELINE_V2_ENABLED", raising=False)
     cfg = Config()
-    assert cfg.pipeline_v2_enabled is False
-
-
-def test_flag_env_on(monkeypatch):
-    """env 开启:Config() 不读 env,须经 _load_from_env()(与 brief 测试的契约偏差,见报告)。"""
-    monkeypatch.setenv("PIPELINE_V2_ENABLED", "true")
-    cfg = Config._load_from_env()
     assert cfg.pipeline_v2_enabled is True
+
+
+def test_flag_env_off(monkeypatch):
+    """env 关闭:Config._load_from_env() 读 env,false 时回退旧路径。"""
+    monkeypatch.setenv("PIPELINE_V2_ENABLED", "false")
+    cfg = Config._load_from_env()
+    assert cfg.pipeline_v2_enabled is False
 
 
 def test_market_review_flag_on_runs_pipeline_v2(tmp_path, monkeypatch):

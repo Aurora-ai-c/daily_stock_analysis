@@ -1162,7 +1162,7 @@ class Config:
     connector_v2_enabled: bool = False
 
     # 五步管线 v2(Part B)：开启后 market_review 触发端点改走 PipelineEngine，默认关闭
-    pipeline_v2_enabled: bool = False
+    pipeline_v2_enabled: bool = True
 
     # === 数据库配置 ===
     database_path: str = "./data/stock_analysis.db"
@@ -2106,7 +2106,7 @@ class Config:
             share_image_xiaohongshu_qr_path=(os.getenv('SHARE_IMAGE_XIAOHONGSHU_QR_PATH') or '').strip() or None,
             prefetch_realtime_quotes=os.getenv('PREFETCH_REALTIME_QUOTES', 'true').lower() == 'true',
             connector_v2_enabled=os.getenv('CONNECTOR_V2_ENABLED', 'false').lower() == 'true',
-            pipeline_v2_enabled=os.getenv('PIPELINE_V2_ENABLED', 'false').lower() == 'true',
+            pipeline_v2_enabled=os.getenv('PIPELINE_V2_ENABLED', 'true').lower() == 'true',
             database_path=os.getenv('DATABASE_PATH', './data/stock_analysis.db'),
             sqlite_wal_enabled=os.getenv('SQLITE_WAL_ENABLED', 'true').lower() == 'true',
             sqlite_busy_timeout_ms=parse_env_int(
