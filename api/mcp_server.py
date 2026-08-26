@@ -185,7 +185,6 @@ class _FundamentalManagerAdapter:
             ctx if isinstance(ctx, dict) else {}
         )
         raw = dict(raw)
-        raw.setdefault("code", code)
         if "market" not in raw:
             raw["market"] = market
         return raw
@@ -201,10 +200,6 @@ def build_mcp_server(
     mcp = FastMCP("dsa")
 
     fundamental_manager = _FundamentalManagerAdapter(manager)
-
-    def _svc_get(key: str, default):
-        getter = (svc or {}).get(key)
-        return getter() if callable(getter) else default
 
     # --- 显式具名参数注册(禁用 **kwargs:FastMCP 1.2.x 会把它当必填字段) ---
     @mcp.tool(name="query_quote")
