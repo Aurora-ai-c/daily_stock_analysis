@@ -42,14 +42,12 @@ class TestMcpRestParity:
     def test_rest_routes_start_with_api_v1(self):
         assert all(r.startswith("/api/v1/") for r in REST_ROUTES.values())
 
-    def test_real_backed_routes_exist_in_app(self):
+    def test_real_backed_routes_exist_in_app(self, monkeypatch):
         from fastapi import FastAPI
 
         from api.app import create_app
 
-        import os
-
-        os.environ.pop("MCP_API_KEYS", None)
+        monkeypatch.delenv("MCP_API_KEYS", raising=False)
         app = create_app()
         assert isinstance(app, FastAPI)
         spec_paths = set(app.openapi().get("paths", {}).keys())

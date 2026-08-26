@@ -155,3 +155,57 @@ class TestEndToEnd:
                 asyncio.run(server.call_tool("trigger_analysis", {}))
         finally:
             _current_key_id.reset(token)
+
+
+class TestHttpMount:
+    """HTTP 层回归:SPA catch-all 不得吞掉 GET /mcp/*(C1)。"""
+
+    def test_mcp_reachable_with_frontend_built(self, monkeypatch, tmp_path):
+        from pathlib import Path
+
+        from fastapi.testclient import TestClient
+
+        from api.app import create_app
+
+        monkeypatch.setenv("MCP_API_KEYS", f"alice:{_hash('secret1')}")
+        static_dir = tmp_path / "static"
+        static_dir.mkdir()
+        (static_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+        app = create_app(static_dir=Path(static_dir))
+        client = TestClient(app)
+
+        # 无凭证 GET /mcp/* 必须 401(fail-closed),而非 SPA index.html
+        resp = client.get("/mcp/sse")
+        assert resp.status_code == 401, (
+            f"expected 401, got {resp.status_code}; "
+            f"SPA catch-all swallowed /mcp? body={resp.text[:80]}"
+        )
+        # POST /messages/ 同样 401
+        resp = client.post("/mcp/messages/?session_id=x", json={})
+        assert resp.status_code == 401
+        # 路由序:/mcp Mount 必须先于 SPA catch-all 注册(Starlette 首个全匹配生效)
+        from starlette.routing import Mount
+
+        route_paths = [
+            getattr(r, "path", None) for r in app.router.routes
+        ]
+        mcp_idx = next(
+            i for i, r in enumerate(app.router.routes)
+            if isinstance(r, Mount) and r.path == "/mcp"
+        )
+        spa_idx = next(
+            i for i, p in enumerate(route_paths)
+            if p == "/{full_path:path}"
+        )
+        assert mcp_idx < spa_idx, "/mcp must be registered before SPA catch-all"
+
+    def test_no_env_mounts_nothing(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from api.app import create_app
+
+        monkeypatch.delenv("MCP_API_KEYS", raising=False)
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/mcp/sse", follow_redirects=False)
+        assert resp.status_code in (404, 307)

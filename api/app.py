@@ -37,7 +37,7 @@ from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -380,6 +380,57 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     
     app.include_router(api_v1_router, prefix="/api/v1")
     add_error_handlers(app)
+
+    # MCP server mount (local-only, conditional on MCP_API_KEYS)
+    try:
+        from api.mcp_auth import is_mcp_enabled, load_keys
+        if is_mcp_enabled():
+            # fail-closed:配置非法(畸形 digest 等)直接拒绝挂载
+            load_keys()
+            from api.mcp_server import build_mcp_server
+
+            manager = DataFetcherManager()
+
+            def _not_wired(*_args: Any, **_kwargs: Any) -> Any:
+                raise RuntimeError("MCP service not wired yet (placeholder)")
+
+            # 显式 not-wired 信号:占位不得返回伪造成功数据
+            svc = {
+                "screening": _not_wired,
+                "signals": _not_wired,
+                "history": _not_wired,
+            }
+
+            def _runner(mode: str = "full", date: Optional[str] = None) -> dict:
+                # 复用每日分析同一把锁(语义先行);实际分析执行待接线,
+                # 显式抛 not-wired 而非返回伪造 run_id。
+                from src.config import get_config
+
+                config = get_config()
+                lock_token = try_acquire_market_review_lock(config)
+                if lock_token is None:
+                    return {"run_id": "", "error": "analysis already running"}
+                try:
+                    raise RuntimeError("MCP analysis trigger not wired yet")
+                finally:
+                    from src.core.market_review_lock import release_market_review_lock
+
+                    release_market_review_lock(lock_token)
+
+            from src.services.pipeline.repository import PipelineRepository
+
+            repo = PipelineRepository()
+
+            mcp_server = build_mcp_server(
+                manager=manager,
+                svc=svc,
+                runner=_runner,
+                repo=repo,
+            )
+            # Mount the SSE app (with auth middleware)
+            app.mount("/mcp", mcp_server._sse_app)  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001 - MCP is optional, must not break main app
+        logger.warning("MCP server mount skipped", exc_info=True)
     
     # ============================================================
     # 根路由和健康检查
@@ -555,53 +606,6 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
                 return FileResponse(file_path, media_type=content_type)
 
             return _frontend_index_response(static_dir)
-
-    # MCP server mount (local-only, conditional on MCP_API_KEYS)
-    try:
-        from api.mcp_auth import is_mcp_enabled, load_keys
-        if is_mcp_enabled():
-            # fail-closed:配置非法(畸形 digest 等)直接拒绝挂载
-            load_keys()
-            from api.mcp_server import build_mcp_server
-
-            manager = DataFetcherManager()
-            svc = {
-                "screening": lambda: {"count": 0},
-                "signals": lambda: [],
-                "history": lambda: [],
-            }
-
-            def _runner(mode: str = "full", date: Optional[str] = None) -> dict:
-                # Acquire the same market review lock as daily analysis.
-                # 实际分析执行待接线(占位 run_id),锁语义与 REST 触发一致。
-                from src.config import get_config
-
-                config = get_config()
-                lock_token = try_acquire_market_review_lock(config)
-                if lock_token is None:
-                    return {"run_id": "", "error": "analysis already running"}
-                try:
-                    run_id = f"mcp-{int(time.time())}"
-                    return {"run_id": run_id}
-                finally:
-                    from src.core.market_review_lock import release_market_review_lock
-
-                    release_market_review_lock(lock_token)
-
-            from src.services.pipeline.repository import PipelineRepository
-
-            repo = PipelineRepository()
-
-            mcp_server = build_mcp_server(
-                manager=manager,
-                svc=svc,
-                runner=_runner,
-                repo=repo,
-            )
-            # Mount the SSE app (with auth middleware)
-            app.mount("/mcp", mcp_server._sse_app)  # type: ignore[attr-defined]
-    except Exception:  # noqa: BLE001 - MCP is optional, must not break main app
-        logger.warning("MCP server mount skipped", exc_info=True)
 
     return app
 
