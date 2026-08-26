@@ -1,14 +1,14 @@
 @echo off
 REM Restore the latest versioned backup to the main exe (manual rollback tool).
 REM Usage: restore.bat [backup_dir] [exe_path]
-REM   default backup_dir = %CD%\data\backups, exe_path = %~dp0dsa-cloud-client.exe
+REM   default backup_dir = %CD%\data\backups, exe_path = %~dp0dsa_client.exe
 REM Backups are named <version>_<exe-name>.bak; newest version wins (0.10.0 > 0.9.0).
 REM NOTE: keep this file ASCII-only; cmd.exe parses batch files in the ANSI codepage.
 setlocal
 set "BACKUP_DIR=%~1"
 set "EXE_PATH=%~2"
 if "%BACKUP_DIR%"=="" set "BACKUP_DIR=%CD%\data\backups"
-if "%EXE_PATH%"=="" set "EXE_PATH=%~dp0dsa-cloud-client.exe"
+if "%EXE_PATH%"=="" set "EXE_PATH=%~dp0dsa_client.exe"
 if not exist "%BACKUP_DIR%" (
   echo [restore] ERROR: backup dir not found: %BACKUP_DIR%
   exit /b 1

@@ -10,7 +10,7 @@ pyinstaller `
   --noconfirm `
   --clean `
   --onedir `
-  --name dsa-cloud-client `
+  --name dsa_client `
   --version-file version_info.txt `
   --add-data "static;static" `
   --hidden-import uvicorn.logging `
@@ -20,4 +20,4 @@ pyinstaller `
   --collect-submodules dsa_client `
   app.py
 
-Write-Host "build complete: dist/dsa-cloud-client/dsa-cloud-client.exe"
+Write-Host "build complete: dist/dsa_client.exe"

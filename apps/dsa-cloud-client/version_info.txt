@@ -14,7 +14,7 @@ VSVersionInfo(
         StringStruct('CompanyName', 'DSA'),
         StringStruct('FileDescription', 'DSA Cloud Client'),
         StringStruct('FileVersion', '0.1.0.0'),
-        StringStruct('InternalName', 'dsa-cloud-client'),
+        StringStruct('InternalName', 'dsa_client'),
         StringStruct('OriginalFilename', 'dsa-cloud-client.exe'),
         StringStruct('ProductName', 'DSA Cloud Client'),
         StringStruct('ProductVersion', '0.1.0.0')])]),

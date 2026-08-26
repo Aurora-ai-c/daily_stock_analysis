@@ -46,7 +46,7 @@ def pick_port(retries: int = 3) -> int:
 
 def main(argv=None) -> int:
     _ensure_console()
-    parser = argparse.ArgumentParser("dsa-cloud-client")
+    parser = argparse.ArgumentParser("dsa_client")
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args(argv)

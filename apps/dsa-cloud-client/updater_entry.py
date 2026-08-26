@@ -6,7 +6,7 @@
 
 可选项:
   --exe-path              待替换的主程序 exe 路径;默认取环境变量 DSA_APP_EXE,
-                          再退化为与 updater.exe 同目录的 dsa-cloud-client.exe
+                          再退化为与 updater.exe 同目录的 dsa_client.exe
   --dry-run               只做下载 + sha256 校验,不做备份/替换/健康检查(冒烟用)
   --health-check-seconds  替换成功后自身存活检查秒数(默认 30;自身存活即视为成功)
 
@@ -30,7 +30,7 @@ from pathlib import Path
 from dsa_client.updater_apply import plan_backup, verify_sha256
 
 LOG_FILE = Path("data/update_log.txt")
-DEFAULT_EXE_NAME = "dsa-cloud-client.exe"
+DEFAULT_EXE_NAME = "dsa_client.exe"
 HEALTH_CHECK_SECONDS = 30
 
 
