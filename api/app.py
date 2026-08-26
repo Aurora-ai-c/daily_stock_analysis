@@ -37,7 +37,7 @@ from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -169,7 +169,6 @@ from api.middlewares.auth import add_auth_middleware
 from api.middlewares.error_handler import add_error_handlers
 from api.v1.schemas.common import HealthResponse
 from src.auth import is_auth_enabled
-from src.core.market_review_lock import try_acquire_market_review_lock
 from data_provider.base import DataFetcherManager
 from src.data.stock_index_loader import find_existing_stock_index_path
 from src.services.system_config_service import SystemConfigService
@@ -391,31 +390,45 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
 
             manager = DataFetcherManager()
 
-            def _not_wired(*_args: Any, **_kwargs: Any) -> Any:
-                raise RuntimeError("MCP service not wired yet (placeholder)")
+            def _svc_screening() -> dict:
+                from src.config import get_config
 
-            # 显式 not-wired 信号:占位不得返回伪造成功数据
+                from api.v1.endpoints.screening import _service as _screening_service
+
+                return _screening_service(get_config()).status()
+
+            def _svc_signals(code: str = "", limit: int = 10):
+                from src.services.decision_signal_service import DecisionSignalService
+
+                return DecisionSignalService().list_signals(
+                    stock_code=code or None,
+                    page=1,
+                    page_size=max(1, min(int(limit), 100)),
+                )
+
+            def _svc_history(limit: int = 10) -> dict:
+                from src.services.history_service import HistoryService
+
+                return HistoryService().get_history_list(page=1, limit=max(1, min(int(limit), 100)))
+
+            # 真实服务接线(只读);失败经 _guarded_call → -32603 + 审计
             svc = {
-                "screening": _not_wired,
-                "signals": _not_wired,
-                "history": _not_wired,
+                "screening": _svc_screening,
+                "signals": _svc_signals,
+                "history": _svc_history,
             }
 
             def _runner(mode: str = "full", date: Optional[str] = None) -> dict:
-                # 复用每日分析同一把锁(语义先行);实际分析执行待接线,
-                # 显式抛 not-wired 而非返回伪造 run_id。
+                # 与 REST /market-review 的 v2 分支同一路径/同一锁语义(engine 单锁去重);
+                # FastMCP sync 工具已在线程池执行,同步调用不阻塞事件循环。
+                import json as _json
+
                 from src.config import get_config
 
-                config = get_config()
-                lock_token = try_acquire_market_review_lock(config)
-                if lock_token is None:
-                    return {"run_id": "", "error": "analysis already running"}
-                try:
-                    raise RuntimeError("MCP analysis trigger not wired yet")
-                finally:
-                    from src.core.market_review_lock import release_market_review_lock
+                from api.v1.endpoints.analysis import _run_pipeline_v2
 
-                    release_market_review_lock(lock_token)
+                resp = _run_pipeline_v2(get_config())
+                return _json.loads(resp.body.decode("utf-8"))
 
             from src.services.pipeline.repository import PipelineRepository
 

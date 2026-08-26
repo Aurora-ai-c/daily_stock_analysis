@@ -46,3 +46,30 @@ class TestToolSpec:
 class TestParamsHash:
     def test_stable_across_key_order(self):
         assert params_hash({"a": 1, "b": 2}) == params_hash({"b": 2, "a": 1})
+class TestSignalHistoryWiring:
+    """MCP svc 接线:get_signal_history 透传 code/limit 给真实服务可调用。"""
+
+    def test_passes_code_and_limit(self):
+        from api.mcp_tools import get_signal_history
+
+        captured = {}
+
+        def _getter(code, limit):
+            captured.update(code=code, limit=limit)
+            return [{"signal": "buy", "code": code}]
+
+        out = get_signal_history("600519", limit=5, svc={"signals": _getter})
+        assert captured == {"code": "600519", "limit": 5}
+        assert out == [{"signal": "buy", "code": "600519"}]
+
+    def test_falls_back_for_legacy_zero_arg_getter(self):
+        from api.mcp_tools import get_signal_history
+
+        calls = []
+
+        def _legacy():
+            calls.append(1)
+            return []
+
+        assert get_signal_history("600519", svc={"signals": _legacy}) == []
+        assert calls

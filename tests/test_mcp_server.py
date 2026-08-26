@@ -213,3 +213,27 @@ class TestHttpMount:
         assert resp.status_code != 401
         assert not resp.headers.get("content-type", "").startswith(
             "text/event-stream")
+class TestAppWiring:
+    """app.py 挂载时注入真实 svc/runner(非 not-wired 占位)。"""
+
+    def test_real_services_injected(self, monkeypatch):
+        from api import mcp_server
+        from api.app import create_app
+
+        captured = {}
+        real_build = mcp_server.build_mcp_server
+
+        def spy(manager, svc, runner, repo):
+            captured["svc_keys"] = set(svc)
+            captured["all_callable"] = all(callable(v) for v in svc.values())
+            captured["runner"] = runner
+            return real_build(manager, svc, runner, repo)
+
+        monkeypatch.setenv("MCP_API_KEYS", f"test:{'0' * 64}")
+        monkeypatch.setattr(mcp_server, "build_mcp_server", spy)
+        # api/app.py 在挂载点才 `from api.mcp_server import build_mcp_server`,
+        # 因此 setattr 生效。
+        create_app()
+        assert captured.get("svc_keys") == {"screening", "signals", "history"}
+        assert captured.get("all_callable") is True
+        assert callable(captured.get("runner"))

@@ -57,7 +57,14 @@ def get_screening_summary(svc=None) -> dict:
 
 
 def get_signal_history(code: str, limit: int = 10, svc=None) -> list[dict]:
-    return (svc or {}).get("signals", lambda: [])()
+    """信号历史;svc["signals"](code, limit) 可调用,旧式无参可调用回退空列表。"""
+    getter = (svc or {}).get("signals")
+    if not callable(getter):
+        return []
+    try:
+        return getter(code=code, limit=limit)
+    except TypeError:
+        return getter()
 
 
 def list_analysis_history(limit: int = 10, svc=None) -> list[dict]:
