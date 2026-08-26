@@ -208,4 +208,8 @@ class TestHttpMount:
         app = create_app()
         client = TestClient(app)
         resp = client.get("/mcp/sse", follow_redirects=False)
-        assert resp.status_code in (404, 307)
+        # 未挂载时请求不得到达 MCP 中间件:既不是 401(中间件拒绝),
+            # 也不是 SSE 流;可能是 404(无前端)或 SPA 的 200 HTML
+        assert resp.status_code != 401
+        assert not resp.headers.get("content-type", "").startswith(
+            "text/event-stream")
