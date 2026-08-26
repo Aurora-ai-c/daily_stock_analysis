@@ -46,3 +46,18 @@ class TestPipelineRepository:
         ensure_pipeline_tables(manager=repo.db)
         repo.create_run(run_id="r1", trigger="cron", mode="full", date="2026-08-16")
         assert repo.get_run("r1") is not None
+
+    def test_failed_run_does_not_block_day(self, tmp_path):
+        """I-1:failed run 不算 active,当日可重新触发(否则永久锁死)。"""
+        repo = PipelineRepository(db_path=str(tmp_path / "t.db"))
+        repo.create_run(run_id="r1", trigger="cron", mode="full", date="2026-08-16",
+                        status="running")
+        assert repo.find_active_run(mode="full", date="2026-08-16") is not None
+        repo.update_run_status(run_id="r1", status="failed",
+                               error_summary="collector down")
+        assert repo.find_active_run(mode="full", date="2026-08-16") is None
+        # completed 仍占用单锁(去重语义)
+        repo2 = PipelineRepository(db_path=str(tmp_path / "t2.db"))
+        repo2.create_run(run_id="r9", trigger="cron", mode="full", date="2026-08-16")
+        repo2.update_run_status(run_id="r9", status="completed")
+        assert repo2.find_active_run(mode="full", date="2026-08-16") is not None

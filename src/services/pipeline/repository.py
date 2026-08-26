@@ -89,7 +89,11 @@ class PipelineRepository:
             session.commit()
 
     def find_active_run(self, *, mode: str, date: str) -> Optional[PipelineRun]:
-        """查找指定 mode/date 下未被取代的活跃运行（单锁语义）。"""
+        """查找指定 mode/date 下未被取代的活跃运行（单锁语义）。
+
+        failed run 不算 active：失败不锁死当日，可重新触发
+        （重放走 SIDE_EFFECT_FREE + run_id 路径）。
+        """
         with self.db.get_session() as session:
             return session.execute(
                 select(PipelineRun)
@@ -97,6 +101,7 @@ class PipelineRepository:
                     PipelineRun.mode == mode,
                     PipelineRun.date == date,
                     PipelineRun.superseded_by.is_(None),
+                    PipelineRun.status != "failed",
                 )
                 .order_by(PipelineRun.id)
                 .limit(1)
