@@ -3,54 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>DSA 云端客户端</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1>DSA 云端客户端</h1>
-  <button id="copy-url" title="复制访问地址">复制地址</button>
-</header>
-<nav>
-  <button data-tab="login">登录</button>
-  <button data-tab="watchlist">自选股</button>
-  <button data-tab="trigger">触发</button>
-  <button data-tab="reports">报告</button>
-</nav>
-<main>
-  <section id="tab-login" class="tab">
-    <h2>登录</h2>
-    <label>GitHub 用户名 <input id="login-owner" placeholder="alice"></label>
-    <label>仓库名 <input id="login-repo" placeholder="dsa-cloud-alice"></label>
-    <label>PAT <input id="login-pat" type="password" placeholder="ghp_..."></label>
-    <button id="login-save">保存</button>
-    <p id="login-status"></p>
-  </section>
-  <section id="tab-watchlist" class="tab" hidden>
-    <h2>自选股</h2>
-    <textarea id="watchlist-input" rows="4" placeholder="逗号分隔，如 600519,600036"></textarea>
-    <button id="watchlist-save">保存</button>
-    <p id="watchlist-status"></p>
-  </section>
-  <section id="tab-trigger" class="tab" hidden>
-    <h2>触发运行</h2>
-    <label>模式
-      <select id="trigger-mode">
-        <option value="full">完整分析</option>
-        <option value="stocks-only">仅股票</option>
-        <option value="market-only">仅大盘</option>
-      </select>
-    </label>
-    <label>本次覆盖自选股(可选) <input id="trigger-stock" placeholder="留空用仓库默认"></label>
-    <button id="trigger-run">运行</button>
-    <p id="trigger-status"></p>
-  </section>
-  <section id="tab-reports" class="tab" hidden>
-    <h2>报告与信号</h2>
-    <button id="reports-refresh">刷新</button>
-    <div id="reports-list"></div>
-  </section>
-</main>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◈</span>
+      <h1>DSA 云端客户端</h1>
+    </div>
+    <div class="top-actions">
+      <span id="conn-pill" class="pill" data-state="loading">
+        <i aria-hidden="true"></i><span id="conn-text">连接中…</span>
+      </span>
+      <button id="copy-url" class="btn ghost sm" type="button" title="复制含令牌的访问地址">复制地址</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="功能导航">
+    <button type="button" role="tab" data-tab="login" aria-selected="true" id="tabbtn-login">登录</button>
+    <button type="button" role="tab" data-tab="watchlist" aria-selected="false" id="tabbtn-watchlist">自选股</button>
+    <button type="button" role="tab" data-tab="trigger" aria-selected="false" id="tabbtn-trigger">触发运行</button>
+    <button type="button" role="tab" data-tab="reports" aria-selected="false" id="tabbtn-reports">报告</button>
+  </nav>
+
+  <main>
+    <!-- 登录 -->
+    <section id="tab-login" class="tab" role="tabpanel" aria-labelledby="tabbtn-login">
+      <div id="login-banner" class="banner" hidden>
+        完成下方配置并保存后,即可管理你的云端分析实例。
+      </div>
+      <form class="card" id="login-form" autocomplete="on">
+        <h2>连接 GitHub 仓库</h2>
+        <p class="hint">PAT 仅保存在<b>本机</b>(Windows DPAPI 加密),用于触发你自己的部署仓库。</p>
+        <div class="field">
+          <label for="login-owner">GitHub 用户名</label>
+          <input id="login-owner" name="username" placeholder="alice" autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="login-repo">仓库名</label>
+          <input id="login-repo" placeholder="dsa-cloud-alice" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="login-pat">Personal Access Token</label>
+          <input id="login-pat" type="password" placeholder="ghp_…" autocomplete="current-password">
+        </div>
+        <div class="row">
+          <button id="login-save" class="btn primary" type="submit">保存并连接</button>
+        </div>
+        <p id="login-status" class="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- 自选股 -->
+    <section id="tab-watchlist" class="tab" role="tabpanel" aria-labelledby="tabbtn-watchlist" hidden>
+      <form class="card">
+        <h2>自选股</h2>
+        <p class="hint">写入你部署仓库的 STOCK_LIST 变量,逗号分隔。</p>
+        <div class="field">
+          <label for="watchlist-input">股票列表</label>
+          <textarea id="watchlist-input" rows="4" placeholder="600519,600036,00700,US.AAPL"></textarea>
+        </div>
+        <div class="row">
+          <button id="watchlist-save" class="btn primary" type="submit">保存</button>
+        </div>
+        <p id="watchlist-status" class="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- 触发 -->
+    <section id="tab-trigger" class="tab" role="tabpanel" aria-labelledby="tabbtn-trigger" hidden>
+      <form class="card">
+        <h2>触发运行</h2>
+        <p class="hint">向云端仓库派发一次 workflow_dispatch 分析任务。</p>
+        <div class="field">
+          <label for="trigger-mode">模式</label>
+          <select id="trigger-mode">
+            <option value="full">完整分析</option>
+            <option value="stocks-only">仅股票</option>
+            <option value="market-only">仅大盘</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="trigger-stock">本次覆盖自选股<span class="opt">(可选)</span></label>
+          <input id="trigger-stock" placeholder="留空使用仓库默认 STOCK_LIST">
+        </div>
+        <div class="row">
+          <button id="trigger-run" class="btn primary" type="submit">运行</button>
+        </div>
+        <p id="trigger-status" class="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- 报告 -->
+    <section id="tab-reports" class="tab" role="tabpanel" aria-labelledby="tabbtn-reports" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>报告与信号</h2>
+          <button id="reports-refresh" class="btn ghost sm" type="button">刷新</button>
+        </div>
+        <p id="reports-status" class="status" aria-live="polite" hidden></p>
+        <div id="reports-list" aria-busy="true">
+          <div class="skel-card"></div>
+          <div class="skel-card"></div>
+          <div class="skel-card"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>数据仅经你本人的 GitHub PAT 访问 · 面板不经过任何第三方</footer>
+</div>
 <script src="/static/vendor/DOMPurify.min.js"></script>
 <script src="/static/app.js"></script>
 </body>

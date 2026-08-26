@@ -1,14 +1,234 @@
-body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; color: #222; }
-header { padding: 12px 20px; background: #1f6feb; color: #fff; display: flex; align-items: center; gap: 12px; }
-nav { display: flex; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #eee; }
-nav button { border: 1px solid #ccc; background: #fff; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
-nav button:hover { background: #f0f6ff; }
-main { max-width: 720px; margin: 20px auto; padding: 0 16px; }
-.tab { display: flex; flex-direction: column; gap: 12px; }
-label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
-input, textarea, select { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-button { cursor: pointer; }
-.ok { color: #1e7e34; }
-.err { color: #c62828; }
-.report-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-.report-card button { margin-left: 8px; }
+/* ==========================================================================
+   DSA Cloud Client — design tokens
+   ========================================================================== */
+:root {
+  /* Tier 1: palette */
+  --c-bg: #0a0e17;
+  --c-surface: #111827;
+  --c-surface-2: #1f2937;
+  --c-border: #1e293b;
+  --c-border-strong: #334155;
+  --c-text: #e2e8f0;
+  --c-muted: #94a3b8;
+  --c-accent: #38bdf8;
+  --c-accent-ink: #06202e;
+  --c-ok: #34d399;
+  --c-warn: #fbbf24;
+  --c-err: #f87171;
+
+  /* Tier 2: semantic */
+  --radius: 10px;
+  --radius-sm: 8px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .4);
+  --shadow-2: 0 6px 24px rgb(0 0 0 / .35);
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur: 160ms;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background:
+    radial-gradient(1200px 500px at 80% -10%, #10203a66, transparent),
+    var(--c-bg);
+  color: var(--c-text);
+  font: 15px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  min-height: 100vh;
+}
+h1 { font-size: clamp(16px, 2.5vw, 18px); margin: 0; font-weight: 650; letter-spacing: .2px; }
+h2 { font-size: 17px; margin: 0 0 4px; font-weight: 650; }
+
+.app { max-width: 860px; margin: 0 auto; padding: 0 20px 40px; display: flex; flex-direction: column; min-height: 100vh; }
+main { flex: 1; padding-top: 20px; }
+
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==========================================================================
+   Topbar
+   ========================================================================== */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 2px;
+  background: linear-gradient(to bottom, var(--c-bg) 78%, transparent);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, #38bdf8, #818cf8);
+  color: var(--c-accent-ink); font-size: 15px; font-weight: 700;
+  box-shadow: var(--shadow-1);
+}
+.top-actions { display: flex; align-items: center; gap: 10px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 12px;
+  border: 1px solid var(--c-border); border-radius: 999px;
+  background: var(--c-surface);
+  font-size: 12.5px; color: var(--c-muted);
+  white-space: nowrap;
+}
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--c-muted); flex: none; }
+.pill[data-state="ok"]   { color: var(--c-text); border-color: #14532d55; }
+.pill[data-state="ok"] i { background: var(--c-ok); box-shadow: 0 0 8px #34d39988; }
+.pill[data-state="warn"]   { color: #fde68a; border-color: #78350f55; }
+.pill[data-state="warn"] i { background: var(--c-warn); box-shadow: 0 0 8px #fbbf2488; }
+.pill[data-state="err"]   { color: #fecaca; border-color: #7f1d1d55; }
+.pill[data-state="err"] i { background: var(--c-err); }
+
+/* ==========================================================================
+   Tabs
+   ========================================================================== */
+.tabs {
+  display: flex; gap: 4px;
+  border: 1px solid var(--c-border); border-radius: var(--radius);
+  background: var(--c-surface);
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button {
+  appearance: none; border: 0; background: transparent;
+  color: var(--c-muted);
+  min-height: 40px; padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  font: inherit; font-weight: 550;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+  white-space: nowrap;
+}
+.tabs button:hover { color: var(--c-text); }
+.tabs button[aria-selected="true"] {
+  color: var(--c-accent-ink);
+  background: var(--c-accent);
+}
+
+/* ==========================================================================
+   Cards & fields
+   ========================================================================== */
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow-1);
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.hint { color: var(--c-muted); font-size: 13px; margin: 2px 0 14px; }
+.hint b { color: var(--c-text); }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 13px; color: var(--c-muted); font-weight: 550; }
+.opt { opacity: .7; font-weight: 400; }
+
+input, textarea, select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: #0d1424;
+  color: var(--c-text);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+textarea { resize: vertical; line-height: 1.5; }
+input::placeholder, textarea::placeholder { color: #64748b; }
+input:hover, textarea:hover, select:hover { border-color: #475569; }
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px #38bdf833;
+}
+select { appearance: none; background-image: linear-gradient(45deg, transparent 49%, var(--c-muted) 50%), linear-gradient(-45deg, transparent 49%, var(--c-muted) 50%); background-position: calc(100% - 20px) 55%, calc(100% - 14px) 55%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 38px; }
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+.btn {
+  appearance: none; border: 1px solid transparent; border-radius: var(--radius-sm);
+  min-height: 44px; padding: 10px 20px;
+  font: inherit; font-weight: 600;
+  cursor: pointer;
+  transition: transform 100ms var(--ease), background var(--dur) var(--ease),
+              border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--c-accent); color: var(--c-accent-ink); }
+.btn.primary:hover { background: #67cdfa; }
+.btn.ghost { background: transparent; color: var(--c-text); border-color: var(--c-border-strong); }
+.btn.ghost:hover { border-color: var(--c-accent); color: var(--c-accent); }
+.btn.sm { min-height: 34px; padding: 5px 13px; font-size: 13px; font-weight: 550; }
+.row { display: flex; gap: 10px; margin-top: 4px; }
+
+/* ==========================================================================
+   Status / banner
+   ========================================================================== */
+.status { min-height: 22px; margin: 10px 0 0; font-size: 13.5px; }
+.status.ok { color: var(--c-ok); }
+.status.err { color: var(--c-err); }
+.banner {
+  border: 1px solid #78350f66;
+  background: #451a03aa;
+  color: #fde68a;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13.5px;
+  margin-bottom: 14px;
+}
+
+/* ==========================================================================
+   Reports
+   ========================================================================== */
+.report-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+  padding: 13px 15px;
+  margin-bottom: 10px;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.report-card:hover { border-color: var(--c-border-strong); transform: translateY(-1px); box-shadow: var(--shadow-2); }
+.report-card strong { font-weight: 600; }
+.report-card em { color: var(--c-warn); font-style: normal; font-size: 12.5px; margin-left: 8px; }
+#reports-list .empty { color: var(--c-muted); text-align: center; padding: 28px 0; }
+
+.skel-card {
+  height: 52px; border-radius: var(--radius-sm); margin-bottom: 10px;
+  background: linear-gradient(100deg, var(--c-surface-2) 40%, #26334a 50%, var(--c-surface-2) 60%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite linear;
+}
+@keyframes shimmer { to { background-position-x: -200%; } }
+
+footer {
+  margin-top: 36px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   Responsive & motion
+   ========================================================================== */
+@media (max-width: 560px) {
+  .app { padding: 0 14px 30px; }
+  .card { padding: 17px; }
+  .tabs button { padding: 8px 13px; }
+  .report-card { flex-direction: column; align-items: stretch; }
+  .pill span { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
