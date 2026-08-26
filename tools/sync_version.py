@@ -16,7 +16,7 @@ CLIENT_DIR = Path(__file__).resolve().parent.parent / "apps/dsa-cloud-client"
 VERSION_PY = CLIENT_DIR / "dsa_client" / "_version.py"
 VERSION_INFO = CLIENT_DIR / "version_info.txt"
 
-TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+TAG_RE = re.compile(r"^(?:[A-Za-z]+-)?v(\d+)\.(\d+)\.(\d+)$")
 FILEVERS_RE = re.compile(r"filevers=\(([\d,]+)\)")
 PRODVERS_RE = re.compile(r"prodvers=\(([\d,]+)\)")
 

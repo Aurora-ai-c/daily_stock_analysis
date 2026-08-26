@@ -72,7 +72,7 @@ jobs:
       - name: 生成 updates.json（合并去重该 version）
         shell: pwsh
         run: |
-          $v = "${{ inputs.release_tag }}".TrimStart("v")
+          $v = "${{ inputs.release_tag }}" -replace '^(?:[A-Za-z]+-)?v'
           $exe = "apps/dsa-cloud-client/dist/dsa_client.exe"
           $updater = "apps/dsa-cloud-client/dist/updater.exe"
           foreach ($f in @($exe, $updater)) {
