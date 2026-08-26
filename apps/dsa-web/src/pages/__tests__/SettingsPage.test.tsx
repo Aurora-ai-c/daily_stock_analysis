@@ -624,6 +624,16 @@ describe('SettingsPage', () => {
     expect(load).toHaveBeenCalled();
   });
 
+  it('guards the AI model panel with a panel-level error boundary', async () => {
+    settingsPanelErrorBoundary.mockClear();
+    useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'ai_model' }));
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByTestId('llm-channel-editor-items')).toBeInTheDocument();
+    expect(settingsPanelErrorBoundary).toHaveBeenCalledWith('AI 模型接入');
+  });
+
   it('renders first-run setup checks and routes setup actions', async () => {
     useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'base' }));
 

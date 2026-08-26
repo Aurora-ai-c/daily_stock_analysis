@@ -1795,29 +1795,35 @@ const SettingsPage: React.FC = () => {
               </SettingsSectionCard>
             ) : null}
             {activeCategory === 'ai_model' ? (
-              <SettingsSectionCard
+              <SettingsPanelErrorBoundary
                 title={t('settings.llmAccess')}
-                description={t('settings.llmAccessDescription')}
+                resetKey={`ai-model:${configVersion}`}
+                diagnosticHint={settingsPanelDiagnosticHint}
               >
-                <GenerationBackendStatusPanel
-                  items={generationBackendDraftItems}
-                  maskToken={maskToken}
-                  disabled={isSaving || isLoading}
-                />
-                <LLMChannelEditor
-                  items={rawActiveItems}
-                  configVersion={configVersion}
-                  maskToken={maskToken}
-                  modelProviderPrefixes={llmModelProviders}
-                  onDraftItemsChange={handleLlmChannelDraftItemsChange}
-                  onSaved={async (updatedItems) => {
-                    setLlmChannelDraftItems([]);
-                    await refreshAfterExternalSave(updatedItems.map((item) => item.key));
-                    void refreshSetupStatus();
-                  }}
-                  disabled={isSaving || isLoading}
-                />
-              </SettingsSectionCard>
+                <SettingsSectionCard
+                  title={t('settings.llmAccess')}
+                  description={t('settings.llmAccessDescription')}
+                >
+                  <GenerationBackendStatusPanel
+                    items={generationBackendDraftItems}
+                    maskToken={maskToken}
+                    disabled={isSaving || isLoading}
+                  />
+                  <LLMChannelEditor
+                    items={rawActiveItems}
+                    configVersion={configVersion}
+                    maskToken={maskToken}
+                    modelProviderPrefixes={llmModelProviders}
+                    onDraftItemsChange={handleLlmChannelDraftItemsChange}
+                    onSaved={async (updatedItems) => {
+                      setLlmChannelDraftItems([]);
+                      await refreshAfterExternalSave(updatedItems.map((item) => item.key));
+                      void refreshSetupStatus();
+                    }}
+                    disabled={isSaving || isLoading}
+                  />
+                </SettingsSectionCard>
+              </SettingsPanelErrorBoundary>
             ) : null}
             {activeCategory === 'system' && passwordChangeable ? (
               <ChangePasswordCard />

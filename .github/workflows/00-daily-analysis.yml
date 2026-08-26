@@ -452,8 +452,8 @@ jobs:
           # 可选值: tencent, akshare_sina, efinance, akshare_em, tickflow, tushare
           # 如果有 TickFlow 或 Tushare Pro，可按权限把 tickflow / tushare 放在更靠前位置
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
-          # 策略信号章节开关（默认关闭；开启后日报「摘要」之后插入「🧭 策略信号」章节）
-          STRATEGY_SIGNALS_ENABLED: ${{ vars.STRATEGY_SIGNALS_ENABLED || secrets.STRATEGY_SIGNALS_ENABLED || 'false' }}
+          # 策略信号章节开关（默认开启；开启后日报「摘要」之后插入「🧭 策略信号」章节，设 false 关闭）
+          STRATEGY_SIGNALS_ENABLED: ${{ vars.STRATEGY_SIGNALS_ENABLED || secrets.STRATEGY_SIGNALS_ENABLED || 'true' }}
           # 策略信号探针诊断 JSON（与报告章节同源，仅用于排查）
           STRATEGY_SIGNALS_PROBE_OUTPUT: ${{ vars.STRATEGY_SIGNALS_PROBE_OUTPUT || secrets.STRATEGY_SIGNALS_PROBE_OUTPUT || 'strategy_signals_latest.json' }}
           

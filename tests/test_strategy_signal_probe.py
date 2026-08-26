@@ -194,9 +194,9 @@ def test_aggregate_strategy_errors_surface():
 # ── bridge rendering / switch ────────────────────────────────────────────────
 
 
-def test_signals_switch_default_off(monkeypatch):
+def test_signals_switch_default_on(monkeypatch):
     monkeypatch.delenv("STRATEGY_SIGNALS_ENABLED", raising=False)
-    assert signals_enabled() is False
+    assert signals_enabled() is True
 
 
 def test_signals_switch_on(monkeypatch):

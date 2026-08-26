@@ -801,7 +801,9 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
         self.assertNotIn("Hold | Score 72", out)
 
     @mock.patch("src.notification.get_config")
+    @mock.patch.dict(os.environ, {"STRATEGY_SIGNALS_ENABLED": "false"})
     def test_generate_aggregate_report_routes_by_report_type(self, mock_get_config: mock.MagicMock):
+        """路由断言与策略信号章节解耦:章节拼接由 test_strategy_signal_probe 覆盖。"""
         mock_get_config.return_value = _make_config()
         service = NotificationService()
         result = AnalysisResult(
