@@ -77,6 +77,10 @@ def verify(ver: tuple[int, int, int]) -> None:
 
 
 def main() -> None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:  # pragma: no cover
+        pass
     if len(sys.argv) != 2:
         raise SystemExit("用法: python tools/sync_version.py <tag>,tag 形如 v1.2.3")
     ver = parse_tag(sys.argv[1])
