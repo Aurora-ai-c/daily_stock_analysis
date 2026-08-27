@@ -1169,10 +1169,10 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    @patch("src.config.logger.warning")
-    def test_deepseek_key_defaults_to_legacy_chat_model_with_deprecation_warning(
+    @patch("src.config.logger.info")
+    def test_deepseek_key_defaults_to_v4_flash_model_with_migration_note(
         self,
-        mock_warning,
+        mock_info,
         _mock_parse_yaml,
         _mock_setup_env,
     ) -> None:
@@ -1183,12 +1183,8 @@ class LLMChannelConfigTestCase(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             config = Config._load_from_env()
 
-        self.assertEqual(config.litellm_model, "deepseek/deepseek-chat")
-        mock_warning.assert_called_once_with(
-            "Deprecation warning:\n"
-            "deepseek-chat will be deprecated on 2026-07-24,\n"
-            "please migrate to deepseek-v4-flash."
-        )
+        self.assertEqual(config.litellm_model, "deepseek/deepseek-v4-flash")
+        mock_info.assert_called_once()
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])

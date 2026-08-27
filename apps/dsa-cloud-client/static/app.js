@@ -182,10 +182,12 @@ function refreshStatus() {
     document.getElementById("status-last-checked").textContent = fmtTs(s.last_checked_ts);
     document.getElementById("status-running").textContent = s.running ? "分析中…" : "空闲";
     document.getElementById("status-stale-banner").hidden = !s.stale;
-    document.getElementById("status-spend").textContent = "$" + (s.today_spend_usd || 0).toFixed(2);
-    document.getElementById("status-budget").textContent = "$" + (s.budget_daily_usd || 0).toFixed(2);
-    document.getElementById("status-budget-mode").textContent = s.budget_mode || "warn";
-    renderDataSourceHealth(s.data_source_health);
+document.getElementById("status-spend").textContent = "$" + (s.today_spend_usd || 0).toFixed(2);
+document.getElementById("status-budget").textContent = "$" + (s.budget_daily_usd || 0).toFixed(2);
+document.getElementById("status-budget-mode").textContent = s.budget_mode || "warn";
+document.getElementById("status-budget-ratio").textContent = Math.round((s.budget_usage_ratio || 0) * 100) + "%";
+document.getElementById("status-budget-banner").hidden = !s.budget_over;
+renderDataSourceHealth(s.data_source_health);
   }).catch((e) => show("status-msg", "状态获取失败: " + e.message, false));
 }
 

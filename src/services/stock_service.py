@@ -93,31 +93,21 @@ class StockService:
     ) -> Dict[str, Any]:
         """
         获取股票历史行情
-        
+
         Args:
             stock_code: 股票代码
             period: K 线周期 (daily/weekly/monthly)
-            days: 获取天数
-            
+            days: 获取天数（非 daily 时按周期根数计，底层抓取足量日线后聚合）
+
         Returns:
             历史行情数据字典
-            
-        Raises:
-            ValueError: 当 period 不是 daily 时抛出（weekly/monthly 暂未实现）
         """
-        # 验证 period 参数，只支持 daily
-        if period != "daily":
-            raise ValueError(
-                f"暂不支持 '{period}' 周期，目前仅支持 'daily'。"
-                "weekly/monthly 聚合功能将在后续版本实现。"
-            )
-        
         try:
             # 调用数据获取器获取历史数据
             from data_provider.base import DataFetcherManager
-            
+
             manager = DataFetcherManager()
-            df, source = manager.get_daily_data(stock_code, days=days)
+            df, source = manager.get_daily_data(stock_code, days=days, period=period)
             
             if df is None or df.empty:
                 logger.warning(f"获取 {stock_code} 历史数据失败")

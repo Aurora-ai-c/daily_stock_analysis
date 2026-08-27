@@ -1586,7 +1586,7 @@ class Config:
                 elif anthropic_api_keys:
                     litellm_model = f'anthropic/{_anthropic_model_name}'
                 elif deepseek_api_keys:
-                    litellm_model = 'deepseek/deepseek-chat'
+                    litellm_model = 'deepseek/deepseek-v4-flash'
                     inferred_legacy_deepseek_model = True
                 elif openai_api_keys:
                     # For openai-compatible models, add prefix only if not already prefixed
@@ -1602,15 +1602,10 @@ class Config:
                     _fb = f'gemini/{_gemini_fallback}' if '/' not in _gemini_fallback else _gemini_fallback
                     litellm_fallback_models = [_fb]
 
-        if (
-            inferred_legacy_deepseek_model
-            and llm_models_source == "legacy_env"
-            and litellm_model == 'deepseek/deepseek-chat'
-        ):
-            logger.warning(
-                "Deprecation warning:\n"
-                "deepseek-chat will be deprecated on 2026-07-24,\n"
-                "please migrate to deepseek-v4-flash."
+        if inferred_legacy_deepseek_model and llm_models_source == "legacy_env":
+            logger.info(
+                "Legacy DeepSeek env detected: default model is now "
+                "'deepseek/deepseek-v4-flash'. Set LITELLM_MODEL explicitly to override."
             )
 
         generation_backend = (

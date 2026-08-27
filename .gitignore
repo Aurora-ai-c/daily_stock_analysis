@@ -94,3 +94,9 @@ docs/specs/
 /.heartbeat-wt
 
 .worktrees/
+
+# PyInstaller 构建产物
+apps/dsa-cloud-client/dsa_client.spec
+
+# 客户端运行时状态(缓存/配置, 非源码)
+apps/dsa-cloud-client/data/

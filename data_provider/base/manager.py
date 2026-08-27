@@ -29,10 +29,10 @@ from src.data.stock_index_loader import get_index_stock_name
 from src.data.stock_mapping import STOCK_NAME_MAP, is_meaningful_stock_name
 from src.services.market_symbol_utils import is_suffix_market_symbol
 from src.services.run_diagnostics import record_provider_run, record_provider_run_started
-from .fundamental_adapter import AkshareFundamentalAdapter
-from .yfinance_fundamental_adapter import YfinanceFundamentalAdapter
-from .realtime_types import CircuitBreaker, UnifiedRealtimeQuote
-from .specs import FetcherSpec
+from ..fundamental_adapter import AkshareFundamentalAdapter
+from ..yfinance_fundamental_adapter import YfinanceFundamentalAdapter
+from ..realtime_types import CircuitBreaker, UnifiedRealtimeQuote
+from ..specs import FetcherSpec
 
 import requests
 import tenacity
@@ -49,585 +49,9 @@ _TRANSIENT_NETWORK_ERRORS = (
     requests.exceptions.SSLError,
 )
 
-
-def _is_transient_network_error(exc: BaseException) -> bool:
-    if isinstance(exc, _TRANSIENT_NETWORK_ERRORS):
-        return True
-    msg = str(exc).lower()
-    return any(
-        token in msg
-        for token in (
-            "remote end closed",
-            "certificate verify",
-            "connection reset",
-            "timed out",
-            "connection aborted",
-        )
-    )
-
-
-# === 标准化列名定义 ===
-STANDARD_COLUMNS = ['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
-
-
-def unwrap_exception(exc: Exception) -> Exception:
-    """
-    Follow chained exceptions and return the deepest non-cyclic cause.
-    """
-    current = exc
-    visited = set()
-
-    while current is not None and id(current) not in visited:
-        visited.add(id(current))
-        next_exc = current.__cause__ or current.__context__
-        if next_exc is None:
-            break
-        current = next_exc
-
-    return current
-
-
-def summarize_exception(exc: Exception) -> Tuple[str, str]:
-    """
-    Build a stable summary for logs while preserving the application-layer message.
-    """
-    root = unwrap_exception(exc)
-    error_type = type(root).__name__
-    message = str(exc).strip() or str(root).strip() or error_type
-    return error_type, " ".join(message.split())
-
-
-def normalize_stock_code(stock_code: str) -> str:
-    """
-    Normalize stock code by stripping exchange prefixes/suffixes.
-
-    Accepted formats and their normalized results:
-    - '600519'      -> '600519'   (already clean)
-    - 'SH600519'    -> '600519'   (strip SH prefix)
-    - 'SH.600519'   -> '600519'   (strip SH. prefix)
-    - 'SZ000001'    -> '000001'   (strip SZ prefix)
-    - 'SS600519'    -> '600519'   (strip legacy Yahoo Shanghai prefix)
-    - 'SZ.000001'   -> '000001'   (strip SZ. prefix)
-    - 'BJ920748'    -> '920748'   (strip BJ prefix, BSE)
-    - 'BJ.920748'   -> '920748'   (strip BJ. prefix, BSE)
-    - 'sh600519'    -> '600519'   (case-insensitive)
-    - '600519.SH'   -> '600519'   (strip .SH suffix)
-    - '000001.SZ'   -> '000001'   (strip .SZ suffix)
-    - '920748.BJ'   -> '920748'   (strip .BJ suffix, BSE)
-    - 'HK00700'     -> 'HK00700'  (keep HK prefix for HK stocks)
-    - '1810.HK'     -> 'HK01810'  (normalize HK suffix to canonical prefix form)
-    - '7203.T'      -> '7203.T'   (keep Japan Yahoo suffix form)
-    - '005930.KS'   -> '005930.KS' (keep Korea Yahoo suffix form)
-    - '2330.TW'     -> '2330.TW'  (keep Taiwan TWSE Yahoo suffix form)
-    - '6505.TWO'    -> '6505.TWO' (keep Taiwan TPEx Yahoo suffix form)
-    - 'AAPL'        -> 'AAPL'     (keep US stock ticker as-is)
-
-    This function is applied at the DataProviderManager layer so that
-    all individual fetchers receive a clean 6-digit code (for A-shares/ETFs).
-    """
-    code = stock_code.strip()
-    upper = code.upper()
-
-    # Normalize HK prefix to a canonical 5-digit form (e.g. hk1810 -> HK01810)
-    if upper.startswith('HK') and not upper.startswith('HK.'):
-        candidate = upper[2:]
-        if candidate.isdigit() and 1 <= len(candidate) <= 5:
-            return f"HK{candidate.zfill(5)}"
-
-    # Strip SH/SZ/SS prefix (e.g. SH600519 -> 600519, SS600519 -> 600519)
-    if upper.startswith(('SH', 'SZ', 'SS')) and not upper.startswith(('SH.', 'SZ.', 'SS.')):
-        candidate = code[2:]
-        # Only strip if the remainder looks like a valid numeric code
-        if candidate.isdigit() and len(candidate) in (5, 6):
-            return candidate
-
-    # Strip dotted SH/SZ/SS prefix (e.g. SH.600519 -> 600519)
-    if upper.startswith(('SH.', 'SZ.', 'SS.')):
-        candidate = code[3:]
-        if candidate.isdigit() and len(candidate) in (5, 6):
-            return candidate
-
-    # Strip BJ prefix (e.g. BJ920748 -> 920748)
-    if upper.startswith('BJ') and not upper.startswith('BJ.'):
-        candidate = code[2:]
-        if candidate.isdigit() and len(candidate) == 6:
-            return candidate
-
-    # Strip dotted BJ prefix (e.g. BJ.920748 -> 920748)
-    if upper.startswith('BJ.'):
-        candidate = code[3:]
-        if candidate.isdigit() and len(candidate) == 6:
-            return candidate
-
-    # Strip .SH/.SZ/.BJ suffix (e.g. 600519.SH -> 600519, 920748.BJ -> 920748)
-    # while preserving explicit Yahoo suffix forms for JP/KR/TW.
-    if '.' in code:
-        base, suffix = code.rsplit('.', 1)
-        if suffix.upper() == 'T' and base.isdigit() and len(base) in (4, 5):
-            return f"{base}.{suffix.upper()}"
-        if suffix.upper() in ('KS', 'KQ') and base.isdigit() and len(base) == 6:
-            return f"{base}.{suffix.upper()}"
-        if suffix.upper() in ('TW', 'TWO') and base.isdigit() and 4 <= len(base) <= 6:
-            return f"{base}.{suffix.upper()}"
-        if suffix.upper() == 'HK' and base.isdigit() and 1 <= len(base) <= 5:
-            return f"HK{base.zfill(5)}"
-        if base.upper() in ('SH', 'SS', 'SZ', 'BJ') and suffix.isdigit():
-            return suffix
-        if suffix.upper() in ('SH', 'SZ', 'SS', 'BJ') and base.isdigit():
-            return base
-
-    return code
-
-
-ETF_PREFIXES = ("51", "52", "56", "58", "15", "16", "18")
-
-
-def _is_us_market(code: str) -> bool:
-    """判断是否为美股/美股指数代码（不含中文前后缀）。"""
-    from .us_index_mapping import is_us_stock_code, is_us_index_code
-
-    normalized = (code or "").strip().upper()
-    return is_us_index_code(normalized) or is_us_stock_code(normalized)
-
-
-def _is_hk_market(code: str) -> bool:
-    """
-    判定是否为港股代码。
-
-    支持 ``.HK`` 后缀、``HK00700`` 前缀形式，以及 4-5 位纯数字裸码
-    （A 股 ETF/股票为 6 位，与港股 4-5 位裸数字不冲突）。``YfinanceFetcher``
-    与 ``AkshareFetcher`` / ``LongbridgeFetcher`` 的 ``_is_hk_code`` 与本
-    函数对裸港股码的位数范围保持一致。
-    """
-    normalized = (code or "").strip().upper()
-    if normalized.endswith(".HK"):
-        base = normalized[:-3]
-        return base.isdigit() and 1 <= len(base) <= 5
-    if normalized.startswith("HK"):
-        digits = normalized[2:]
-        return digits.isdigit() and 1 <= len(digits) <= 5
-    if normalized.isdigit() and 4 <= len(normalized) <= 5:
-        return True
-    return False
-
-
-def _is_jp_market(code: str) -> bool:
-    """判定是否为日本 Yahoo Finance suffix 代码（如 7203.T）。"""
-    return is_suffix_market_symbol(code, "jp")
-
-
-def _is_kr_market(code: str) -> bool:
-    """判定是否为韩国 Yahoo Finance suffix 代码（如 005930.KS / 035720.KQ）。"""
-    return is_suffix_market_symbol(code, "kr")
-
-
-def _is_tw_market(code: str) -> bool:
-    """判定是否为台湾 Yahoo Finance suffix 代码（TWSE 上市 2330.TW / TPEx 上柜 6505.TWO）。
-
-    台股 base 为 4-6 位（普通股 4 位，ETF/其他至 6 位，如 00878 / 006208）。
-    仅带 .TW/.TWO 后缀的代码才识别为台股，裸 6 位代码仍按 A 股语义处理。
-    """
-    return is_suffix_market_symbol(code, "tw")
-
-
-def _is_etf_code(code: str) -> bool:
-    """判定 A 股 ETF 基金代码（保守规则）。"""
-    normalized = normalize_stock_code(code)
-    return (
-        normalized.isdigit()
-        and len(normalized) == 6
-        and normalized.startswith(ETF_PREFIXES)
-    )
-
-
-def _coerce_chip_metric(value: Any) -> Optional[float]:
-    try:
-        if value is None:
-            return None
-        numeric = float(value)
-        if np.isnan(numeric):
-            return None
-        return numeric
-    except (TypeError, ValueError):
-        return None
-
-
-def _is_meaningful_chip_distribution(chip: Any) -> bool:
-    """Validate that a provider returned usable core chip metrics."""
-    if chip is None:
-        return False
-    avg_cost = _coerce_chip_metric(getattr(chip, "avg_cost", None))
-    concentration_90 = _coerce_chip_metric(getattr(chip, "concentration_90", None))
-    concentration_70 = _coerce_chip_metric(getattr(chip, "concentration_70", None))
-    return (
-        avg_cost is not None
-        and avg_cost > 0
-        and (
-            (concentration_90 is not None and concentration_90 >= 0)
-            or (concentration_70 is not None and concentration_70 >= 0)
-        )
-    )
-
-
-def _market_tag(code: str) -> str:
-    """返回市场标签: cn/us/hk/jp/kr/tw."""
-    if _is_us_market(code):
-        return "us"
-    if _is_hk_market(code):
-        return "hk"
-    if _is_jp_market(code):
-        return "jp"
-    if _is_kr_market(code):
-        return "kr"
-    if _is_tw_market(code):
-        return "tw"
-    return "cn"
-
-
-def is_bse_code(code: str) -> bool:
-    """
-    Check if the code is a Beijing Stock Exchange (BSE) A-share code.
-
-    BSE rules (2026):
-    - New format (2024+): 92xxxx main trading codes
-    - Historical ranges: 43xxxx, 83xxxx, 87xxxx, 88xxxx
-    - Special instruments: 81xxxx convertible bonds, 82xxxx preferred shares
-    - Subscription codes: 889xxx
-    Note: 900xxx are Shanghai B-shares and must return False.
-    """
-    c = (code or "").strip().split(".")[0]
-    if len(c) != 6 or not c.isdigit():
-        return False
-
-    if c.startswith("900"):
-        return False
-
-    return c.startswith(("92", "43", "81", "82", "83", "87", "88"))
-
-def is_st_stock(name: str) -> bool:
-    """
-    Check if the stock is an ST or *ST stock based on its name.
-
-    ST stocks have special trading rules and typically a ±5% limit.
-    """
-    n = (name or "").upper()
-    return 'ST' in n
-
-def is_kc_cy_stock(code: str) -> bool:
-    """
-    Check if the stock is a STAR Market (科创板) or ChiNext (创业板) stock based on its code.
-
-    - STAR Market: Codes starting with 688
-    - ChiNext: Codes starting with 300
-    Both have a ±20% limit.
-    """
-    c = (code or "").strip().split(".")[0]
-    return c.startswith("688") or c.startswith("30")
-
-
-def canonical_stock_code(code: str) -> str:
-    """
-    Return the canonical (uppercase) form of a stock code.
-
-    This is a display/storage layer concern, distinct from normalize_stock_code
-    which strips exchange prefixes. Apply at system input boundaries to ensure
-    consistent case across BOT, WEB UI, API, and CLI paths (Issue #355).
-
-    Examples:
-        'aapl'    -> 'AAPL'
-        'AAPL'    -> 'AAPL'
-        '600519'  -> '600519'  (digits are unchanged)
-        'hk00700' -> 'HK00700'
-    """
-    return (code or "").strip().upper()
-
-
-class DataFetchError(Exception):
-    """数据获取异常基类"""
-    pass
-
-
-class RateLimitError(DataFetchError):
-    """API 速率限制异常"""
-    pass
-
-
-class DataSourceUnavailableError(DataFetchError):
-    """数据源不可用异常"""
-    pass
-
-
-class BaseFetcher(ABC):
-    """
-    数据源抽象基类
-    
-    职责：
-    1. 定义统一的数据获取接口
-    2. 提供数据标准化方法
-    3. 实现通用的技术指标计算
-    
-    子类实现：
-    - _fetch_raw_data(): 从具体数据源获取原始数据
-    - _normalize_data(): 将原始数据转换为标准格式
-    """
-    
-    name: str = "BaseFetcher"
-    priority: int = 99  # 优先级数字越小越优先
-    allow_empty_daily_data: bool = False
-    
-    @abstractmethod
-    def _fetch_raw_data(self, stock_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        从数据源获取原始数据（子类必须实现）
-        
-        Args:
-            stock_code: 股票代码，如 '600519', '000001'
-            start_date: 开始日期，格式 'YYYY-MM-DD'
-            end_date: 结束日期，格式 'YYYY-MM-DD'
-            
-        Returns:
-            原始数据 DataFrame（列名因数据源而异）
-        """
-        pass
-    
-    @abstractmethod
-    def _normalize_data(self, df: pd.DataFrame, stock_code: str) -> pd.DataFrame:
-        """
-        标准化数据列名（子类必须实现）
-
-        将不同数据源的列名统一为：
-        ['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
-        """
-        pass
-
-    def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
-        """
-        获取主要指数实时行情
-
-        Args:
-            region: 市场区域，cn=A股 us=美股
-
-        Returns:
-            List[Dict]: 指数列表，每个元素为字典，包含:
-                - code: 指数代码
-                - name: 指数名称
-                - current: 当前点位
-                - change: 涨跌点数
-                - change_pct: 涨跌幅(%)
-                - volume: 成交量
-                - amount: 成交额
-        """
-        return None
-
-    def get_market_stats(self) -> Optional[Dict[str, Any]]:
-        """
-        获取市场涨跌统计
-
-        Returns:
-            Dict: 包含:
-                - up_count: 上涨家数
-                - down_count: 下跌家数
-                - flat_count: 平盘家数
-                - limit_up_count: 涨停家数
-                - limit_down_count: 跌停家数
-                - total_amount: 两市成交额
-        """
-        return None
-
-    def get_sector_rankings(self, n: int = 5) -> Optional[Tuple[List[Dict], List[Dict]]]:
-        """
-        获取板块涨跌榜
-
-        Args:
-            n: 返回前n个
-
-        Returns:
-            Tuple: (领涨板块列表, 领跌板块列表)
-        """
-        return None
-
-    def get_concept_rankings(self, n: int = 5) -> Optional[Tuple[List[Dict], List[Dict]]]:
-        """
-        获取概念/题材涨跌榜。
-
-        Returns:
-            Tuple: (领涨概念列表, 领跌概念列表)
-        """
-        return None
-
-    def get_hot_stocks(self, n: int = 10) -> Optional[List[Dict[str, Any]]]:
-        """
-        获取市场人气股榜。
-
-        Returns:
-            List[Dict]: 人气股列表
-        """
-        return None
-
-    def get_limit_up_pool(
-        self,
-        date: Optional[str] = None,
-        n: int = 20,
-    ) -> Optional[List[Dict[str, Any]]]:
-        """
-        获取涨停池/连板梯队。
-
-        Args:
-            date: YYYYMMDD，默认由具体数据源决定
-            n: 返回条数
-        """
-        return None
-
-    def get_daily_data(
-        self,
-        stock_code: str, 
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        days: int = 30
-    ) -> pd.DataFrame:
-        """
-        获取日线数据（统一入口）
-        
-        流程：
-        1. 计算日期范围
-        2. 调用子类获取原始数据
-        3. 标准化列名
-        4. 计算技术指标
-        
-        Args:
-            stock_code: 股票代码
-            start_date: 开始日期（可选）
-            end_date: 结束日期（可选，默认今天）
-            days: 获取天数（当 start_date 未指定时使用）
-            
-        Returns:
-            标准化的 DataFrame，包含技术指标
-        """
-        # 计算日期范围
-        if end_date is None:
-            end_date = datetime.now().strftime('%Y-%m-%d')
-        
-        if start_date is None:
-            # 默认获取最近 30 个交易日（按日历日估算，多取一些）
-            from datetime import timedelta
-            start_dt = datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days * 2)
-            start_date = start_dt.strftime('%Y-%m-%d')
-
-        request_start = time.time()
-        logger.info(f"[{self.name}] 开始获取 {stock_code} 日线数据: 范围={start_date} ~ {end_date}")
-        
-        try:
-            # Step 1: 获取原始数据
-            raw_df = self._fetch_raw_data(stock_code, start_date, end_date)
-            
-            if raw_df is None:
-                raise DataFetchError(f"[{self.name}] 未获取到 {stock_code} 的数据")
-            if raw_df.empty:
-                elapsed = time.time() - request_start
-                logger.info(
-                    f"[{self.name}] {stock_code} 返回空日线结果: 范围={start_date} ~ {end_date}, "
-                    f"elapsed={elapsed:.2f}s"
-                )
-                if self.allow_empty_daily_data:
-                    return pd.DataFrame(columns=STANDARD_COLUMNS)
-                raise DataFetchError(f"[{self.name}] 未获取到 {stock_code} 的数据")
-            
-            # Step 2: 标准化列名
-            df = self._normalize_data(raw_df, stock_code)
-            
-            # Step 3: 数据清洗
-            df = self._clean_data(df)
-            
-            # Step 4: 计算技术指标
-            df = self._calculate_indicators(df)
-
-            elapsed = time.time() - request_start
-            logger.info(
-                f"[{self.name}] {stock_code} 获取成功: 范围={start_date} ~ {end_date}, "
-                f"rows={len(df)}, elapsed={elapsed:.2f}s"
-            )
-            return df
-            
-        except Exception as e:
-            elapsed = time.time() - request_start
-            error_type, error_reason = summarize_exception(e)
-            logger.error(
-                f"[{self.name}] {stock_code} 获取失败: 范围={start_date} ~ {end_date}, "
-                f"error_type={error_type}, elapsed={elapsed:.2f}s, reason={error_reason}"
-            )
-            raise DataFetchError(f"[{self.name}] {stock_code}: {error_reason}") from e
-    
-    def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        数据清洗
-        
-        处理：
-        1. 确保日期列格式正确
-        2. 数值类型转换
-        3. 去除空值行
-        4. 按日期排序
-        """
-        df = df.copy()
-        
-        # 确保日期列为 datetime 类型
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-        
-        # 数值列类型转换
-        numeric_cols = ['open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        
-        # 去除关键列为空的行
-        df = df.dropna(subset=['close', 'volume'])
-        
-        # 按日期升序排序
-        df = df.sort_values('date', ascending=True).reset_index(drop=True)
-        
-        return df
-    
-    def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算技术指标
-        
-        计算指标：
-        - MA5, MA10, MA20: 移动平均线
-        - Volume_Ratio: 量比（今日成交量 / 5日平均成交量）
-        """
-        df = df.copy()
-        
-        # 移动平均线
-        df['ma5'] = df['close'].rolling(window=5, min_periods=1).mean()
-        df['ma10'] = df['close'].rolling(window=10, min_periods=1).mean()
-        df['ma20'] = df['close'].rolling(window=20, min_periods=1).mean()
-        
-        # 量比：当日成交量 / 5日平均成交量
-        # 注意：此处的 volume_ratio 是“日线成交量 / 前5日均量(shift 1)”的相对倍数，
-        # 与部分交易软件口径的“分时量比（同一时刻对比）”不同，含义更接近“放量倍数”。
-        # 该行为目前保留（按需求不改逻辑）。
-        avg_volume_5 = df['volume'].rolling(window=5, min_periods=1).mean()
-        df['volume_ratio'] = df['volume'] / avg_volume_5.shift(1)
-        df['volume_ratio'] = df['volume_ratio'].fillna(1.0)
-        
-        # 保留2位小数
-        for col in ['ma5', 'ma10', 'ma20', 'volume_ratio']:
-            if col in df.columns:
-                df[col] = df[col].round(2)
-        
-        return df
-    
-    @staticmethod
-    def random_sleep(min_seconds: float = 1.0, max_seconds: float = 3.0) -> None:
-        """
-        智能随机休眠（Jitter）
-        
-        防封禁策略：模拟人类行为的随机延迟
-        在请求之间加入不规则的等待时间
-        """
-        sleep_time = random.uniform(min_seconds, max_seconds)
-        logger.debug(f"随机休眠 {sleep_time:.2f} 秒...")
-        time.sleep(sleep_time)
+from data_provider.base._helpers import *
+from data_provider.base.exceptions import *
+from data_provider.base.fetcher import *
 
 
 class DataFetcherManager:
@@ -1002,7 +426,7 @@ class DataFetcherManager:
                     logger.debug("[TickFlowFetcher] 切换实例时关闭失败: %s", exc)
 
             try:
-                from .tickflow_fetcher import TickFlowFetcher
+                from ..tickflow_fetcher import TickFlowFetcher
 
                 fetcher = TickFlowFetcher(
                     api_key=api_key,
@@ -1273,15 +697,15 @@ class DataFetcherManager:
           5. TencentFetcher (Priority 5) - A 股最终兜底
         """
         from src.config import get_config
-        from .efinance_fetcher import EfinanceFetcher
-        from .tencent_fetcher import TencentFetcher
-        from .akshare_fetcher import AkshareFetcher
-        from .tushare_fetcher import TushareFetcher
-        from .tickflow_fetcher import TickFlowFetcher
-        from .pytdx_fetcher import PytdxFetcher
-        from .baostock_fetcher import BaostockFetcher
-        from .yfinance_fetcher import YfinanceFetcher
-        from .longbridge_fetcher import LongbridgeFetcher
+        from ..efinance_fetcher import EfinanceFetcher
+        from ..tencent_fetcher import TencentFetcher
+        from ..akshare_fetcher import AkshareFetcher
+        from ..tushare_fetcher import TushareFetcher
+        from ..tickflow_fetcher import TickFlowFetcher
+        from ..pytdx_fetcher import PytdxFetcher
+        from ..baostock_fetcher import BaostockFetcher
+        from ..yfinance_fetcher import YfinanceFetcher
+        from ..longbridge_fetcher import LongbridgeFetcher
         config = get_config()
         # 创建所有数据源实例（优先级在各 Fetcher 的 __init__ 中确定）
         efinance = EfinanceFetcher()
@@ -1319,14 +743,14 @@ class DataFetcherManager:
 
         finnhub_api_key = (getattr(config, "finnhub_api_key", None) or "").strip()
         if finnhub_api_key:
-            from .finnhub_fetcher import FinnhubFetcher
+            from ..finnhub_fetcher import FinnhubFetcher
             optional_fetchers.append(FinnhubFetcher())
         else:
             logger.debug("[数据源初始化] 跳过未配置的 FinnhubFetcher")
 
         alphavantage_api_key = (getattr(config, "alphavantage_api_key", None) or "").strip()
         if alphavantage_api_key:
-            from .alphavantage_fetcher import AlphaVantageFetcher
+            from ..alphavantage_fetcher import AlphaVantageFetcher
             optional_fetchers.append(AlphaVantageFetcher())
         else:
             logger.debug("[数据源初始化] 跳过未配置的 AlphaVantageFetcher")
@@ -1360,12 +784,44 @@ class DataFetcherManager:
             self._fetchers.sort(key=lambda f: f.priority)
             self._refresh_fetcher_indexes_locked()
     
+    def _resample_to_period(self, df: "pd.DataFrame", period: str) -> "pd.DataFrame":
+        """Aggregate daily bars into weekly/monthly bars.
+
+        All sources return daily data; non-daily periods are derived by
+        resampling so every provider effectively supports weekly/monthly.
+        Returns the original frame unchanged when resampling is not applicable.
+        """
+        if period not in ("weekly", "monthly") or df is None or df.empty:
+            return df
+        if "date" not in df.columns:
+            return df
+        work = df.copy()
+        try:
+            work["date"] = pd.to_datetime(work["date"])
+        except Exception:  # noqa: BLE001
+            return df
+        work = work.sort_values("date").set_index("date")
+        rule = "W" if period == "weekly" else "ME"
+        agg = {
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+            "amount": "sum",
+            "pct_chg": "last",
+        }
+        agg = {k: v for k, v in agg.items() if k in work.columns}
+        out = work.resample(rule).agg(agg).dropna(how="all").reset_index()
+        return out
+
     def get_daily_data(
-        self, 
+        self,
         stock_code: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        days: int = 30
+        days: int = 30,
+        period: str = "daily",
     ) -> Tuple[pd.DataFrame, str]:
         """
         获取日线数据（自动切换数据源）
@@ -1389,10 +845,21 @@ class DataFetcherManager:
         Raises:
             DataFetchError: 所有数据源都失败时抛出
         """
-        from .us_index_mapping import is_us_index_code, is_us_stock_code
+        from ..us_index_mapping import is_us_index_code, is_us_stock_code
 
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
+
+        period = (period or "daily").lower()
+        if period not in ("daily", "weekly", "monthly"):
+            period = "daily"
+        # For non-daily periods, fetch enough underlying daily bars to form
+        # approximately `days` period-bars (5 trading days/week, 22/month).
+        fetch_days = days
+        if period == "weekly":
+            fetch_days = max(days, 1) * 5
+        elif period == "monthly":
+            fetch_days = max(days, 1) * 22
 
         fetchers = self._get_fetchers_snapshot()
         errors = []
@@ -1464,7 +931,8 @@ class DataFetcherManager:
                             stock_code=stock_code,
                             start_date=start_date,
                             end_date=end_date,
-                            days=days,
+                            days=fetch_days,
+                            period=period,
                         )
                         if df is not None and not df.empty:
                             duration_ms = int((time.time() - attempt_start) * 1000)
@@ -1482,7 +950,7 @@ class DataFetcherManager:
                                 f"rows={len(df)}, elapsed={elapsed:.2f}s"
                             )
                             self._record_daily_source_success(fetcher, market)
-                            return df, fetcher.name
+                            return self._resample_to_period(df, period), fetcher.name
                         duration_ms = int((time.time() - attempt_start) * 1000)
                         record_provider_run(
                             data_type="daily_data",
@@ -1562,7 +1030,7 @@ class DataFetcherManager:
                         f"rows={len(df)}, elapsed={elapsed:.2f}s"
                     )
                     self._record_daily_source_success(fetcher, market)
-                    return df, fetcher.name
+                    return self._resample_to_period(df, period), fetcher.name
                 duration_ms = int((time.time() - attempt_start) * 1000)
                 record_provider_run(
                     data_type="daily_data",
@@ -1759,7 +1227,8 @@ class DataFetcherManager:
                     fetcher,
                     "prefetch_daily_klines",
                     stock_codes,
-                    days=days,
+                    days=fetch_days,
+                            period=period,
                 )
                 or 0
             )
@@ -1863,8 +1332,8 @@ class DataFetcherManager:
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
 
-        from .akshare_fetcher import _is_us_code
-        from .us_index_mapping import is_us_index_code
+        from ..akshare_fetcher import _is_us_code
+        from ..us_index_mapping import is_us_index_code
         from src.config import get_config
 
         config = get_config()
@@ -2321,7 +1790,7 @@ class DataFetcherManager:
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
 
-        from .realtime_types import get_chip_circuit_breaker
+        from ..realtime_types import get_chip_circuit_breaker
         from src.config import get_config
 
         config = get_config()
@@ -2486,7 +1955,7 @@ class DataFetcherManager:
                 return name
 
         # 3. 依次尝试各个数据源
-        from .akshare_fetcher import _is_us_code
+        from ..akshare_fetcher import _is_us_code
         is_us = _is_us_code(stock_code)
         _US_CAPABLE_FETCHERS = {"YfinanceFetcher", "LongbridgeFetcher", "FinnhubFetcher", "AlphaVantageFetcher"}
         for fetcher in self._get_fetchers_snapshot():
@@ -4007,3 +3476,5 @@ class DataFetcherManager:
         if last_error:
             logger.warning(f"[涨停池] 所有数据源均失败，最终错误: {last_error}")
         return []
+
+__all__ = ['logger', '_TRANSIENT_NETWORK_ERRORS', 'DataFetcherManager']

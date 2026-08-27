@@ -137,10 +137,12 @@
       <div class="card">
         <h2>今日花费(估算)</h2>
         <p class="hint">按每次触发乐观累加,非精确账单。</p>
+        <div id="status-budget-banner" class="banner err" hidden>⚠ 今日预估花费已超过每日预算 —— 任务仍会继续运行,但请注意成本控制。</div>
         <ul class="kv">
           <li><span>今日已估算</span><b id="status-spend">$0.00</b></li>
           <li><span>日预算</span><b id="status-budget">$1.00</b></li>
           <li><span>护栏模式</span><b id="status-budget-mode">warn</b></li>
+          <li><span>预算使用率</span><b id="status-budget-ratio">0%</b></li>
         </ul>
       </div>
       <div class="card">

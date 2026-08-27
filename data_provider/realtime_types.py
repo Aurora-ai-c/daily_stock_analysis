@@ -15,6 +15,7 @@
 """
 
 import logging
+import os
 import time
 from threading import RLock
 from dataclasses import dataclass, field
@@ -438,18 +439,35 @@ class CircuitBreaker:
                 self._states.clear()
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 # 全局熔断器实例（实时行情专用）
+# 阈值可通过环境变量调整，无需改码：
+#   REALTIME_CB_FAILURE_THRESHOLD / REALTIME_CB_COOLDOWN_SECONDS
 _realtime_circuit_breaker = CircuitBreaker(
-    failure_threshold=3,      # 连续失败3次熔断
-    cooldown_seconds=300.0,   # 冷却5分钟
-    half_open_max_calls=1
+    failure_threshold=_env_int("REALTIME_CB_FAILURE_THRESHOLD", 3),
+    cooldown_seconds=_env_float("REALTIME_CB_COOLDOWN_SECONDS", 300.0),
+    half_open_max_calls=1,
 )
 
 # 筹码接口熔断器（更保守的策略，因为该接口更不稳定）
+#   CHIP_CB_FAILURE_THRESHOLD / CHIP_CB_COOLDOWN_SECONDS
 _chip_circuit_breaker = CircuitBreaker(
-    failure_threshold=2,      # 连续失败2次熔断
-    cooldown_seconds=600.0,   # 冷却10分钟
-    half_open_max_calls=1
+    failure_threshold=_env_int("CHIP_CB_FAILURE_THRESHOLD", 2),
+    cooldown_seconds=_env_float("CHIP_CB_COOLDOWN_SECONDS", 600.0),
+    half_open_max_calls=1,
 )
 
 

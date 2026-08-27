@@ -182,7 +182,7 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
         if body.stock_list:
             inputs["stock_list"] = body.stock_list
         git.dispatch(config.owner, config.repo, ref="main", inputs=inputs)
-        ss.add_spend(est)
+        ss.add_spend(est, config)
         return {"ok": True, "estimated_usd": est, "projected_today_usd": ss.today_spend()}
 
     @app.get("/api/status")
@@ -207,15 +207,18 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
                 data_source_health = fetch_data_source_health(config)
             except Exception:
                 data_source_health = None
+        budget = ss.evaluate_budget(config)
         return {
             "last_success_ts": state.get("last_success_ts", 0),
             "last_failure_ts": state.get("last_failure_ts", 0),
             "last_checked_ts": state.get("last_checked_ts", 0),
             "stale": ss.is_stale(state),
             "running": running,
-            "today_spend_usd": ss.today_spend(),
-            "budget_daily_usd": config.budget_daily_usd,
-            "budget_mode": config.budget_mode,
+            "today_spend_usd": budget["today_spend_usd"],
+            "budget_daily_usd": budget["budget_daily_usd"],
+            "budget_mode": budget["budget_mode"],
+            "budget_over": budget["over"],
+            "budget_usage_ratio": budget["ratio"],
             "data_source_health": data_source_health,
         }
 

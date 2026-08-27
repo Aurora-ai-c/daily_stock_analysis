@@ -707,7 +707,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     # ------------------------------------------------------------------
     "DEEPSEEK_API_KEY": {
         "title": "DeepSeek API Key",
-        "description": "Official DeepSeek API key (from https://platform.deepseek.com). For compatibility, a key set alone still auto-infers deepseek/deepseek-chat and logs a deprecation warning; new configs should migrate to deepseek/deepseek-v4-flash. Also works in multi-channel mode.",
+        "description": "Official DeepSeek API key (from https://platform.deepseek.com). A key set alone auto-infers the default model deepseek/deepseek-v4-flash. Also works in multi-channel mode.",
         "category": "ai_model",
         "data_type": "string",
         "ui_control": "password",
@@ -5085,3 +5085,5 @@ def _infer_ui_control(data_type: str, key: str) -> str:
     if data_type == "array":
         return "textarea"
     return "text"
+
+__all__ = ['SCHEMA_VERSION', '_CATEGORY_DEFINITIONS', 'WEB_SETTINGS_HIDDEN_FROM_UI', '_FIELD_DEFINITIONS', '_DOC_FULL_GUIDE_ENV', '_DOC_FULL_GUIDE_SEARCH', '_DOC_FULL_GUIDE_DATA_SOURCE', '_DOC_FULL_GUIDE_NOTIFICATION', '_DOC_LLM_CONFIG', '_DOC_CUSTOM_WEBHOOK', '_FIELD_HELP_METADATA', 'get_category_definitions', 'get_registered_field_keys', '_extract_option_values', 'get_field_definition', 'build_schema_response', '_is_sensitive_key', '_infer_category', '_infer_data_type', '_infer_ui_control']
