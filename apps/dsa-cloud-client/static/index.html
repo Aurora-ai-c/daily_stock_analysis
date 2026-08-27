@@ -27,6 +27,9 @@
     <button type="button" role="tab" data-tab="watchlist" aria-selected="false" id="tabbtn-watchlist">自选股</button>
     <button type="button" role="tab" data-tab="trigger" aria-selected="false" id="tabbtn-trigger">触发运行</button>
     <button type="button" role="tab" data-tab="reports" aria-selected="false" id="tabbtn-reports">报告</button>
+    <button type="button" role="tab" data-tab="status" aria-selected="false" id="tabbtn-status">状态</button>
+    <button type="button" role="tab" data-tab="settings" aria-selected="false" id="tabbtn-settings">设置</button>
+    <button type="button" role="tab" data-tab="secrets" aria-selected="false" id="tabbtn-secrets">密钥</button>
   </nav>
 
   <main>
@@ -113,6 +116,105 @@
       </div>
     </section>
   </main>
+
+    <!-- 状态(可观测性) -->
+    <section id="tab-status" class="tab" role="tabpanel" aria-labelledby="tabbtn-status" hidden>
+      <div class="card">
+        <h2>运行状态</h2>
+        <p class="hint">本地持久化最近一次云端运行结果,重启后保留。</p>
+        <div id="status-stale-banner" class="banner err" hidden>⚠ 已超过 48 小时未成功运行,请检查云端任务或网络。</div>
+        <ul class="kv">
+          <li><span>上次成功运行</span><b id="status-last-success">—</b></li>
+          <li><span>上次失败</span><b id="status-last-failure">—</b></li>
+          <li><span>上次检查</span><b id="status-last-checked">—</b></li>
+          <li><span>当前状态</span><b id="status-running">—</b></li>
+        </ul>
+        <div class="row">
+          <button id="status-refresh" class="btn ghost sm" type="button">刷新状态</button>
+        </div>
+        <p id="status-msg" class="status" aria-live="polite"></p>
+      </div>
+      <div class="card">
+        <h2>今日花费(估算)</h2>
+        <p class="hint">按每次触发乐观累加,非精确账单。</p>
+        <ul class="kv">
+          <li><span>今日已估算</span><b id="status-spend">$0.00</b></li>
+          <li><span>日预算</span><b id="status-budget">$1.00</b></li>
+          <li><span>护栏模式</span><b id="status-budget-mode">warn</b></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>数据源健康</h2>
+        <p class="hint">来自云端最近一次运行的熔断/优先级快照。若全部源熔断(all_failed),AlphaEvo 将因无 OHLCV 输入而输出空信号。</p>
+        <div id="status-allfailed-banner" class="banner err" hidden>⚠ 所有行情数据源均失败 —— AlphaEvo 信号将為空。请在「密钥」中配置 TUSHARE_TOKEN 或检查网络。</div>
+        <ul class="kv" id="status-sources">
+          <li class="muted">暂无数据源健康信息(需成功运行一次后同步)。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 设置(网络 + 成本) -->
+    <section id="tab-settings" class="tab" role="tabpanel" aria-labelledby="tabbtn-settings" hidden>
+      <form class="card" id="settings-network-form">
+        <h2>网络(受限网络逃生)</h2>
+        <p class="hint">若客户端无法直连 api.github.com(证书/代理问题),在此配置。</p>
+        <div class="field">
+          <label for="net-proxy">HTTPS 代理<span class="opt">(可选)</span></label>
+          <input id="net-proxy" placeholder="http://127.0.0.1:7890">
+        </div>
+        <div class="field">
+          <label for="net-ca">自定义 CA 包路径<span class="opt">(可选)</span></label>
+          <input id="net-ca" placeholder="留空使用内置证书包">
+        </div>
+        <div class="row">
+          <button id="net-save" class="btn primary" type="submit">保存网络设置</button>
+        </div>
+        <p id="net-status" class="status" aria-live="polite"></p>
+      </form>
+      <form class="card" id="settings-budget-form">
+        <h2>成本护栏</h2>
+        <p class="hint">触发前向云端派发前,预估花费并核对当日预算。</p>
+        <div class="field">
+          <label for="budget-daily">日预算(美元)</label>
+          <input id="budget-daily" type="number" min="0" step="0.1" value="1.0">
+        </div>
+        <div class="field">
+          <label for="budget-mode">超额处理</label>
+          <select id="budget-mode">
+            <option value="warn">仅提醒</option>
+            <option value="block">拦截触发</option>
+          </select>
+        </div>
+        <div class="row">
+          <button id="budget-save" class="btn primary" type="submit">保存护栏</button>
+        </div>
+        <p id="budget-status" class="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- 密钥(仓库 Secrets 自管理) -->
+    <section id="tab-secrets" class="tab" role="tabpanel" aria-labelledby="tabbtn-secrets" hidden>
+      <div class="card">
+        <h2>仓库密钥 (Secrets)</h2>
+        <p class="hint">写入你部署仓库的 GitHub Actions Secrets(行情源 / LLM / 通知)。值经 libsodium 加密,服务端不可读。保存后立即生效。</p>
+        <div id="secrets-groups"></div>
+        <div class="card">
+          <h3>高级:任意密钥</h3>
+          <div class="field">
+            <label for="adv-secret-name">名称</label>
+            <input id="adv-secret-name" placeholder="如 EXTRA_VAR">
+          </div>
+          <div class="field">
+            <label for="adv-secret-value">值</label>
+            <input id="adv-secret-value" type="password" placeholder="密钥值">
+          </div>
+          <div class="row">
+            <button id="adv-secret-save" class="btn primary sm" type="button">保存任意密钥</button>
+          </div>
+        </div>
+        <p id="secrets-status" class="status" aria-live="polite"></p>
+      </div>
+    </section>
 
   <footer>数据仅经你本人的 GitHub PAT 访问 · 面板不经过任何第三方</footer>
 </div>

@@ -34,8 +34,36 @@ from .yfinance_fundamental_adapter import YfinanceFundamentalAdapter
 from .realtime_types import CircuitBreaker, UnifiedRealtimeQuote
 from .specs import FetcherSpec
 
+import requests
+import tenacity
+
 # 配置日志
 logger = logging.getLogger(__name__)
+
+# === 请求级瞬态错误重试（瞬态网络错误，非持久错误） ===
+# 覆盖今晚出现的 SSL(CERTIFICATE_VERIFY_FAILED)/RemoteDisconnected 等瞬态,
+# 在单源内部重试若干次,失败再交由上层多源 fallback 切到下一源。
+_TRANSIENT_NETWORK_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.SSLError,
+)
+
+
+def _is_transient_network_error(exc: BaseException) -> bool:
+    if isinstance(exc, _TRANSIENT_NETWORK_ERRORS):
+        return True
+    msg = str(exc).lower()
+    return any(
+        token in msg
+        for token in (
+            "remote end closed",
+            "certificate verify",
+            "connection reset",
+            "timed out",
+            "connection aborted",
+        )
+    )
 
 
 # === 标准化列名定义 ===
@@ -740,8 +768,23 @@ class DataFetcherManager:
                 self._fetcher_call_locks[fetcher_id] = lock
             return lock
 
+    @tenacity.retry(
+        retry=tenacity.retry_if_exception(_is_transient_network_error),
+        wait=tenacity.wait_exponential(multiplier=0.5, max=4.0),
+        stop=tenacity.stop_after_attempt(3),
+        reraise=True,
+        before_sleep=lambda s: logger.warning(
+            "[数据源重试] 瞬态网络错误,第 %s 次重试: %s",
+            s.attempt_number,
+            s.outcome.exception() if s.outcome else "",
+        ),
+    )
     def _call_fetcher_method(self, fetcher: BaseFetcher, method_name: str, *args, **kwargs):
-        """Serialize shared fetcher state access through manager-owned per-instance locks."""
+        """Serialize shared fetcher state access through manager-owned per-instance locks.
+
+        请求级瞬态重试:单源内部对 SSL/RemoteDisconnected/超时等瞬态错误重试,
+        避免一次网络抖动就直接判该源失败并切走(多源 fallback 作为更后防线)。
+        """
         method = getattr(fetcher, method_name)
         with self._get_fetcher_call_lock(fetcher):
             return method(*args, **kwargs)
@@ -867,6 +910,46 @@ class DataFetcherManager:
     def reset_daily_source_health(cls) -> None:
         """Reset daily source health state for tests/admin diagnostics."""
         cls._daily_source_health.reset()
+
+    def get_data_source_health(self) -> Dict[str, Any]:
+        """导出日线数据源健康度快照(供可观测性/客户端展示)。
+
+        基于已有的 CircuitBreaker 状态(连续失败熔断) + 各源优先级 + 可用性。
+        当所有日线源均处于熔断(open)时,summary 标记为 'all_failed' ——
+        这正是 AlphaEvo 信号为空的根因(无可用 OHLCV 输入)。
+        """
+        try:
+            states = self._daily_source_health.get_status()
+        except Exception:
+            states = {}
+        fetchers = self._get_fetchers_snapshot()
+        fetchers = self._filter_fetchers_by_capability(fetchers, capability="daily_data")
+        sources = []
+        for f in fetchers:
+            name = getattr(f, "name", None) or f.__class__.__name__
+            health_key = self._daily_health_key(f, "cn")
+            try:
+                available = self._is_daily_source_available(f, "cn")
+            except Exception:
+                available = False
+            sources.append({
+                "name": name,
+                "priority": getattr(f, "priority", None),
+                "state": states.get(health_key, "closed"),
+                "available": available,
+            })
+        sources.sort(key=lambda s: (s["priority"] is None, s["priority"] if s["priority"] is not None else 0))
+        tripped = [s for s in sources if s["state"] == "open"]
+        summary = "all_failed" if sources and len(tripped) == len(sources) else (
+            "degraded" if tripped else "ok"
+        )
+        return {
+            "sources": sources,
+            "summary": summary,
+            "tripped_count": len(tripped),
+            "total": len(sources),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     def _get_cached_stock_name(self, stock_code: str) -> Optional[str]:
         self._ensure_concurrency_guards()

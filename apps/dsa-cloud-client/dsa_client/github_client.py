@@ -3,21 +3,40 @@
 
 from __future__ import annotations
 
+import base64
 import time
 
 import requests
+try:
+    from nacl.public import PublicKey, SealedBox
+    HAS_NACL = True
+except ImportError:
+    HAS_NACL = False
 
 API_BASE = "https://api.github.com"
 MAX_RETRIES = 4
 
 
+def _default_ca_bundle() -> str:
+    """Frozen PyInstaller exe often loses the system CA bundle; fall back to
+    certifi's bundled roots so api.github.com TLS works out-of-the-box."""
+    try:
+        import certifi
+        return certifi.where()
+    except Exception:
+        return True  # requests default verification
+
+
 class GitHubClient:
-    def __init__(self, pat: str, session_factory=None, sleep=time.sleep):
+    def __init__(self, pat: str, session_factory=None, sleep=time.sleep,
+                 proxy: str | None = None, ca_bundle: str | None = None):
         if session_factory is None:
             session_factory = requests.Session
         self._pat = pat
         self._session_factory = session_factory
         self.sleep = sleep
+        self._proxy = proxy
+        self._verify = ca_bundle if ca_bundle else _default_ca_bundle()
 
     def _new_session(self):
         s = self._session_factory()
@@ -26,7 +45,12 @@ class GitHubClient:
             "X-GitHub-Api-Version": "2022-11-28",
             "Authorization": f"Bearer {self._pat}",
         })
+        if self._proxy:
+            s.proxies.update({"http": self._proxy, "https": self._proxy})
+        if self._verify is not None:
+            s.verify = self._verify
         return s
+
 
     def request(self, method: str, path: str, **kw):
         session = self._new_session()
@@ -65,6 +89,35 @@ class GitHubClient:
     def set_variable(self, owner: str, repo: str, name: str, value: str) -> None:
         self.request("PATCH", f"/repos/{owner}/{repo}/actions/variables/{name}",
                      json={"name": name, "value": value})
+
+    # ---- Secrets (encrypted, libsodium sealed-box) ----
+    def _fetch_secret_public_key(self, owner: str, repo: str) -> tuple[str, str]:
+        """Fetch the repo's Actions secrets public key (raw base64) and key_id.
+
+        GitHub returns {key_id: str, key: str} where ``key`` is the base64 of a
+        raw 32-byte Ed25519 public key.
+        """
+        data = self.request("GET", f"/repos/{owner}/{repo}/actions/secrets/public-key")
+        return data.get("key_id", ""), data.get("key", "")
+
+    def list_secret_names(self, owner: str, repo: str) -> list[str]:
+        """Return secret names that exist in the repo (read-only, no values)."""
+        data = self.request("GET", f"/repos/{owner}/{repo}/actions/secrets")
+        # GitHub wraps the list as {"total_count": N, "secrets": [...]}
+        secrets = data.get("secrets", []) if isinstance(data, dict) else []
+        return [s.get("name", "") for s in secrets]
+
+    def set_secret(self, owner: str, repo: str, name: str, value: str) -> None:
+        """Write a secret value (encrypted via NaCl sealed-box)."""
+        if not HAS_NACL:
+            raise RuntimeError("pynacl is required to set secrets; pip install pynacl")
+        key_id, raw_b64 = self._fetch_secret_public_key(owner, repo)
+        public_key = PublicKey(base64.b64decode(raw_b64))
+        sealed = SealedBox(public_key).encrypt(value.encode("utf-8"))
+        # GitHub expects: {"encrypted_value": "<base64>", "key_id": "<id>"}
+        self.request("PUT", f"/repos/{owner}/{repo}/actions/secrets/{name}",
+                     json={"encrypted_value": base64.b64encode(sealed).decode("ascii"),
+                           "key_id": key_id})
 
     def get_runs(self, owner: str, repo: str, limit: int = 5) -> list[dict]:
         return self.request("GET", f"/repos/{owner}/{repo}/actions/runs?per_page={limit}").get("workflow_runs", [])

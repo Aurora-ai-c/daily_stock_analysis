@@ -95,6 +95,13 @@ class Config:
         self.repo: str = ""
         self.token: str = ""
         self.pat_enc: str = ""
+        # 网络层(可观测性 / 受限网络逃生)
+        self.github_proxy: str = ""        # 可选:http(s)://host:port
+        self.github_ca_bundle: str = ""    # 可选:自定义 CA 包路径
+        # 成本护栏
+        self.budget_daily_usd: float = 1.0
+        self.budget_mode: str = "warn"     # "warn" | "block"
+
 
     def set_pat(self, plaintext: str) -> None:
         self.pat_enc = dpapi_encrypt(plaintext)
@@ -120,7 +127,16 @@ class Config:
         return missing
 
     def to_dict(self) -> dict:
-        return {"owner": self.owner, "repo": self.repo, "token": self.token, "pat_enc": self.pat_enc}
+        return {
+            "owner": self.owner,
+            "repo": self.repo,
+            "token": self.token,
+            "pat_enc": self.pat_enc,
+            "github_proxy": self.github_proxy,
+            "github_ca_bundle": self.github_ca_bundle,
+            "budget_daily_usd": self.budget_daily_usd,
+            "budget_mode": self.budget_mode,
+        }
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -129,6 +145,10 @@ class Config:
         c.repo = data.get("repo", "")
         c.token = data.get("token", "")
         c.pat_enc = data.get("pat_enc", "")
+        c.github_proxy = data.get("github_proxy", "")
+        c.github_ca_bundle = data.get("github_ca_bundle", "")
+        c.budget_daily_usd = float(data.get("budget_daily_usd", 1.0))
+        c.budget_mode = data.get("budget_mode", "warn")
         return c
 
     def save(self) -> None:

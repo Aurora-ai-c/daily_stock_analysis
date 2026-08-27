@@ -85,6 +85,7 @@ jobs:
           echo "⏱️ 探针超时: ${TIMEOUT_SECONDS}s"
           timeout "${TIMEOUT_SECONDS}" python -m src.strategy_signal_probe \
             --output "${STRATEGY_SIGNALS_PROBE_OUTPUT:-strategy_signals_latest.json}" \
+            --health-output "data_source_health.json" \
             || { echo "⚠️ 策略信号探针失败（主流程继续）"; true; }
       
       - name: 执行股票分析
@@ -574,6 +575,7 @@ jobs:
             reports/
             logs/
             strategy_signals_latest.json
+            data_source_health.json
           retention-days: 30
       
       - name: heartbeat

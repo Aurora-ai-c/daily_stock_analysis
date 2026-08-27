@@ -386,17 +386,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Strategy signal probe")
     parser.add_argument("--config-dir", default=str(DEFAULT_CONFIG_DIR))
     parser.add_argument("--symbols", nargs="*", default=None, help="override watchlist")
-    parser.add_argument("--output", default=None, help="write JSON to path")
+    parser.add_argument("--output", default=None, help="write signal JSON to path")
+    parser.add_argument("--health-output", default=None,
+                        help="write data-source health JSON to path (for observability)")
     args = parser.parse_args()
 
+    from data_provider.base import DataFetcherManager
+    manager = DataFetcherManager()
     result = asyncio.run(
-        run_probe(Path(args.config_dir), symbols=args.symbols)
+        run_probe(Path(args.config_dir), data_manager=manager, symbols=args.symbols)
     )
     text = json.dumps(result, ensure_ascii=False, indent=2)
     if args.output:
         Path(args.output).write_text(text, encoding="utf-8")
         logger.info("signal JSON written to %s", args.output)
     print(text)
+
+    # 导出数据源健康度(熔断/优先级),供客户端展示为什么 AlphaEvo 可能为空
+    health = manager.get_data_source_health()
+    health_path = args.health_output or "data_source_health.json"
+    try:
+        Path(health_path).write_text(
+            json.dumps(health, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        logger.info("data source health written to %s (summary=%s)", health_path, health.get("summary"))
+    except Exception as exc:  # noqa: BLE001 - health dump must not fail the run
+        logger.warning("failed to write data source health: %s", exc)
     return 0
 
 

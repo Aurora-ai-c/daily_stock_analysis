@@ -186,6 +186,10 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   font-size: 13.5px;
   margin-bottom: 14px;
 }
+.tag { font-size: 12px; padding: 2px 9px; border-radius: 999px; font-weight: 600; }
+.tag.ok { color: var(--c-ok); background: #064e3b66; border: 1px solid #065f4666; }
+.tag.err { color: var(--c-err); background: #7f1d1d55; border: 1px solid #991b1b66; }
+.tag.warn { color: var(--c-warn); background: #78350f55; border: 1px solid #92400e66; }
 
 /* ==========================================================================
    Reports
