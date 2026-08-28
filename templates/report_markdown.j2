@@ -204,10 +204,7 @@
 
 {% set checklist = battle.get('action_checklist', []) %}
 {% if checklist %}
-**✅ {{ labels.checklist_heading }}**
-{% for item in checklist %}
-- {{ item }}
-{% endfor %}
+**✅ {{ labels.checklist_heading }}**: {% for item in checklist %}{{ item }}{% if not loop.last %}　{% endif %}{% endfor %}
 {% endif %}
 {% endif %}
 
