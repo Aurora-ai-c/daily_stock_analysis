@@ -1906,7 +1906,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         markdown = HistoryService(self.db).get_markdown_report(str(record_id))
 
         self.assertIsNotNone(markdown)
-        self.assertIn("**筹码**: 筹码分布未启用或数据源暂不可用，未纳入筹码判断。", markdown)
+        self.assertIn("**筹码**: 筹码分布默认关闭（云端数据源不稳定），未纳入筹码判断。", markdown)
         self.assertEqual(markdown.count("数据缺失，无法判断"), 0)
 
     def test_history_detail_returns_persisted_market_review_report(self) -> None:

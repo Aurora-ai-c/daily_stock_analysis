@@ -1219,7 +1219,7 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
 
         out = service.generate_dashboard_report([result], report_date="2026-02-01")
 
-        self.assertIn("**筹码**: 筹码分布未启用或数据源暂不可用，未纳入筹码判断。", out)
+        self.assertIn("**筹码**: 筹码分布默认关闭（云端数据源不稳定），未纳入筹码判断。", out)
         self.assertEqual(out.count("数据缺失，无法判断"), 0)
 
     @mock.patch("src.notification.get_config")

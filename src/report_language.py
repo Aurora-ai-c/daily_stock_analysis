@@ -317,9 +317,9 @@ _NO_DATA_BY_LANGUAGE = {
 }
 
 _CHIP_UNAVAILABLE_BY_LANGUAGE = {
-    "zh": "筹码分布未启用或数据源暂不可用，未纳入筹码判断。",
-    "en": "Chip distribution is disabled or temporarily unavailable; chip signals were not used.",
-    "ko": "매물대가 비활성화되었거나 데이터 소스를 일시적으로 사용할 수 없어 매물대 신호를 반영하지 않았습니다.",
+    "zh": "筹码分布默认关闭（云端数据源不稳定），未纳入筹码判断。",
+    "en": "Chip distribution is off by default (cloud source unstable); chip signals were not used.",
+    "ko": "매물대는 기본 비활성화(클라우드 소스 불안정)되어 매물대 신호를 반영하지 않았습니다.",
 }
 
 _CHIP_PLACEHOLDER_EXACT = {
@@ -445,6 +445,7 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "action_points_heading": "操作点位",
         "position_advice_heading": "持仓建议",
         "analysis_model_label": "分析模型",
+        "data_date_label": "数据日期",
         "not_investment_advice": "AI生成，仅供参考，不构成投资建议",
         "details_report_hint": "详细报告见",
         "financial_summary_heading": "财务摘要",
@@ -579,6 +580,7 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "action_points_heading": "Action Levels",
         "position_advice_heading": "Position Advice",
         "analysis_model_label": "Model",
+        "data_date_label": "Data date",
         "not_investment_advice": "AI-generated content for reference only. Not investment advice.",
         "details_report_hint": "See detailed report:",
         "financial_summary_heading": "Financial Summary",
@@ -713,6 +715,7 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "action_points_heading": "대응 가격대",
         "position_advice_heading": "보유 전략",
         "analysis_model_label": "분석 모델",
+        "data_date_label": "데이터 날짜",
         "not_investment_advice": "AI 생성 참고용이며 투자 권유가 아닙니다.",
         "details_report_hint": "상세 리포트 보기:",
         "financial_summary_heading": "재무 요약",

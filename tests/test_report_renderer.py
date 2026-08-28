@@ -379,7 +379,7 @@ class TestReportRenderer(unittest.TestCase):
         out = render("markdown", [r], summary_only=False)
 
         self.assertIsNotNone(out)
-        self.assertIn("**筹码**: 筹码分布未启用或数据源暂不可用，未纳入筹码判断。", out)
+        self.assertIn("**筹码**: 筹码分布默认关闭（云端数据源不稳定），未纳入筹码判断。", out)
         self.assertEqual(out.count("数据缺失，无法判断"), 0)
 
     def test_render_markdown_renders_strategy_synthesis_with_localized_labels(self) -> None:

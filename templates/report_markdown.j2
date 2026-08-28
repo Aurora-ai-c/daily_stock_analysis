@@ -3,7 +3,7 @@
 
 > {{ labels.analyzed_prefix }} **{{ results|length }}** {{ labels.stock_unit }} | 🟢{{ labels.buy_label }}:{{ buy_count }} 🟡{{ labels.watch_label }}:{{ hold_count }} 🔴{{ labels.sell_label }}:{{ sell_count }}
 {% if market_status_line %}
-{{ market_status_line }}
+> {{ market_status_line }}{% if data_date %} | {{ labels.data_date_label }}：{{ data_date }}{% endif %} | {{ labels.generated_at_label }}：{{ report_timestamp }} | {{ labels.analysis_model_label }}：{{ models_used|join('、') or 'N/A' }}
 {% endif %}
 
 ## 📊 {{ labels.summary_heading }}
@@ -128,14 +128,10 @@
 - {{ condition }}
 {% endfor %}
 {% endif %}
-{% if phase_decision.get('confidence_reason') %}
-**{{ labels.confidence_reason_label }}**: {{ phase_decision.get('confidence_reason') }}
-{% endif %}
-{% if phase_decision.get('data_limitations') %}
-**{{ labels.data_limitations_label }}**:
-{% for limitation in phase_decision.get('data_limitations') %}
-- {{ limitation }}
-{% endfor %}
+{% set _conf = phase_decision.get('confidence_reason') %}
+{% set _lims = phase_decision.get('data_limitations') or [] %}
+{% if _conf or _lims %}
+**⚠️ {{ labels.data_limitations_label }}**: {% if _lims %}{% for limitation in _lims %}{{ limitation }}{% if not loop.last %}；{% endif %}{% endfor %}{% endif %}{% if _conf %}（{{ labels.confidence_reason_label }}：{{ _conf }}）{% endif %}
 {% endif %}
 
 {% endif %}

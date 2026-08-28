@@ -186,6 +186,23 @@ def render(
 
     report_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    def _derive_data_date(results: List[AnalysisResult]) -> Optional[str]:
+        """Latest reusable daily-bar date behind the analysis (effective_daily_bar_date).
+
+        Surfacing this in the header prevents a pinned post-market review from
+        being misread as live same-day data when it is actually based on the
+        previous session's close (Issue #P0 timestamp/session consistency).
+        """
+        for r in (results or []):
+            mps = getattr(r, "market_phase_summary", None)
+            if isinstance(mps, dict):
+                d = mps.get("effective_daily_bar_date") or mps.get("session_date")
+                if d:
+                    return str(d)
+        return None
+
+    data_date = _derive_data_date(results)
+
     def failed_checks(checklist: List[str]) -> List[str]:
         return [c for c in (checklist or []) if c.startswith("❌") or c.startswith("⚠️")]
 
@@ -222,6 +239,7 @@ def render(
         "models_used": models_used,
         "show_llm_model": show_llm_model,
         "market_status_line": market_status_line(),
+        "data_date": data_date,
         "escape_md": _escape_md,
         "clean_sniper": _clean_sniper_value,
         "failed_checks": failed_checks,
