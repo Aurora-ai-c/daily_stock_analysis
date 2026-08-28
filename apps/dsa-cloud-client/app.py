@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import random
 import socket
 import sys
@@ -76,7 +77,10 @@ def main(argv=None) -> int:
         except Exception:  # noqa: BLE001
             print("⚠️ 无法自动打开浏览器,请手动访问: " + url)
 
-    start_update_check_thread()
+    # 自定义构建默认关闭自动更新,避免用官方 stock 版本覆盖掉本地定制修复。
+    # 如需更新检查,设置环境变量 DSA_UPDATE_CHECK=1 再启动。
+    if os.environ.get("DSA_UPDATE_CHECK", "0") == "1":
+        start_update_check_thread()
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0

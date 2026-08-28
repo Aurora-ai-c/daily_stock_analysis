@@ -6,6 +6,8 @@ from __future__ import annotations
 import hmac
 import io
 import json
+import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -17,6 +19,10 @@ from pydantic import BaseModel
 from . import github_client as gc, config as cfg_mod, state_store as ss
 
 CONFIG_DIR = cfg_mod.CONFIG_DIR
+
+# GitHub 连通性在后台守护线程探测并缓存;/api/state 与 /api/status 只读缓存,
+# 永不阻塞请求线程 → UI 不会卡在「连接中」。
+_GH_CACHE = {"error": "检测中…", "running": False, "data_source_health": None, "ts": 0.0}
 
 
 def fetch_data_source_health(config) -> dict | None:
@@ -98,6 +104,36 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
 
     git_factory = client_factory or _default_factory
 
+    def _gh_probe_loop():
+        """后台线程:周期性探测 GitHub 连通性并写入 _GH_CACHE,请求路径只读缓存。"""
+        while True:
+            try:
+                if config.owner and config.repo and config.get_pat():
+                    runs = git_factory(config).get_runs(config.owner, config.repo, limit=5)
+                    _GH_CACHE["error"] = None
+                    _GH_CACHE["running"] = gc.is_running(runs)
+                    try:
+                        st = ss.load_run_state()
+                        for r in runs:
+                            ss.record_run_outcome(st, r)
+                        ss.save_run_state(st)
+                    except Exception:
+                        pass
+                    try:
+                        _GH_CACHE["data_source_health"] = fetch_data_source_health(config)
+                    except Exception:
+                        _GH_CACHE["data_source_health"] = None
+                else:
+                    _GH_CACHE["error"] = None
+                    _GH_CACHE["running"] = False
+                    _GH_CACHE["data_source_health"] = None
+            except Exception as exc:  # noqa: BLE001
+                _GH_CACHE["error"] = f"{type(exc).__name__}: {exc}"
+            _GH_CACHE["ts"] = time.time()
+            time.sleep(60)
+
+    threading.Thread(target=_gh_probe_loop, daemon=True).start()
+
 
     if static_dir is not None and static_dir.exists():
         app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -131,17 +167,13 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
             return JSONResponse({"error": "forbidden"}, status_code=403)
         pat = config.get_pat()
         logged_in = bool(config.owner and config.repo and pat)
-        running = False
-        if logged_in:
-            try:
-                git = git_factory(config)
-                running = gc.is_running(git.get_runs(config.owner, config.repo))
-            except Exception:
-                running = False
+        running = _GH_CACHE["running"]
+        github_error = _GH_CACHE["error"]
         return {"owner": config.owner, "repo": config.repo, "logged_in": logged_in,
                 "running": running,
                 "pat_configured": bool(pat),
-                "needs_login": not (config.owner and config.repo and pat)}
+                "needs_login": not (config.owner and config.repo and pat),
+                "github_error": github_error}
 
     @app.get("/api/watchlist")
     def watchlist(request: Request):
@@ -190,23 +222,9 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
         if not _guard(request):
             return JSONResponse({"error": "forbidden"}, status_code=403)
         state = ss.load_run_state()
-        running = False
-        if config.owner and config.repo and config.get_pat():
-            try:
-                git = git_factory(config)
-                runs = git.get_runs(config.owner, config.repo, limit=5)
-                for r in runs:
-                    ss.record_run_outcome(state, r)
-                ss.save_run_state(state)
-                running = gc.is_running(runs)
-            except Exception:
-                pass
-        data_source_health = None
-        if config.owner and config.repo and config.get_pat():
-            try:
-                data_source_health = fetch_data_source_health(config)
-            except Exception:
-                data_source_health = None
+        running = _GH_CACHE["running"]
+        github_error = _GH_CACHE["error"]
+        data_source_health = _GH_CACHE["data_source_health"]
         budget = ss.evaluate_budget(config)
         return {
             "last_success_ts": state.get("last_success_ts", 0),
@@ -214,6 +232,7 @@ def create_app(config: "cfg_mod.Config", static_dir: Path | None = None,
             "last_checked_ts": state.get("last_checked_ts", 0),
             "stale": ss.is_stale(state),
             "running": running,
+            "github_error": github_error,
             "today_spend_usd": budget["today_spend_usd"],
             "budget_daily_usd": budget["budget_daily_usd"],
             "budget_mode": budget["budget_mode"],

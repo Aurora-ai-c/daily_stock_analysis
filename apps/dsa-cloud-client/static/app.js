@@ -134,7 +134,8 @@ document.getElementById("login-form").addEventListener("submit", (ev) => {
           switchTab("login");
         }
       }).catch(() => show("login-status", "保存失败", false));
-  }).catch(() => show("login-status", "保存失败", false));
+  }
+}).catch(() => show("login-status", "保存失败", false));
 });
 
 // 自选股
@@ -186,8 +187,17 @@ document.getElementById("status-spend").textContent = "$" + (s.today_spend_usd |
 document.getElementById("status-budget").textContent = "$" + (s.budget_daily_usd || 0).toFixed(2);
 document.getElementById("status-budget-mode").textContent = s.budget_mode || "warn";
 document.getElementById("status-budget-ratio").textContent = Math.round((s.budget_usage_ratio || 0) * 100) + "%";
-document.getElementById("status-budget-banner").hidden = !s.budget_over;
-renderDataSourceHealth(s.data_source_health);
+    document.getElementById("status-budget-banner").hidden = !s.budget_over;
+    renderDataSourceHealth(s.data_source_health);
+    if (s.github_error) {
+      if (s.github_error === "检测中…") {
+        show("status-msg", "GitHub 连接检测中…", true);
+      } else {
+        show("status-msg", "GitHub 连接失败: " + s.github_error + "（若在公司网络,请在「设置→网络」填 github_proxy / github_ca_bundle）", false);
+      }
+    } else {
+      show("status-msg", "GitHub 连接正常 ✓", true);
+    }
   }).catch((e) => show("status-msg", "状态获取失败: " + e.message, false));
 }
 
