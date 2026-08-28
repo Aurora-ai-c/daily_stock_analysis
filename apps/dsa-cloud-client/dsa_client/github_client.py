@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import ssl
 import time
 
 import requests
@@ -15,6 +16,14 @@ except ImportError:
 
 API_BASE = "https://api.github.com"
 MAX_RETRIES = 4
+
+# 信任系统证书存储:公司代理常做 TLS 拦截,浏览器/系统信任公司 CA,
+# 而 requests+certifi 默认不信任 → SSL 失败。truststore 让请求走系统 CA 存储。
+try:
+    import truststore
+    _SYSTEM_CTX = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+except Exception:  # noqa: BLE001
+    _SYSTEM_CTX = None
 
 
 def _default_ca_bundle() -> str:
@@ -36,7 +45,7 @@ class GitHubClient:
         self._session_factory = session_factory
         self.sleep = sleep
         self._proxy = proxy
-        self._verify = ca_bundle if ca_bundle else _default_ca_bundle()
+        self._ca_bundle = ca_bundle
 
     def _new_session(self):
         s = self._session_factory()
@@ -47,8 +56,17 @@ class GitHubClient:
         })
         if self._proxy:
             s.proxies.update({"http": self._proxy, "https": self._proxy})
-        if self._verify is not None:
-            s.verify = self._verify
+        if self._ca_bundle:
+            s.verify = self._ca_bundle
+        elif _SYSTEM_CTX is not None:
+            # 用系统证书存储校验,匹配浏览器行为(公司代理 TLS 拦截也能通过)
+            class _SystemTrustAdapter(requests.adapters.HTTPAdapter):
+                def init_poolmanager(self, *args, **kwargs):
+                    kwargs["ssl_context"] = _SYSTEM_CTX
+                    return super().init_poolmanager(*args, **kwargs)
+            s.mount("https://", _SystemTrustAdapter())
+        else:
+            s.verify = _default_ca_bundle()
         return s
 
 
