@@ -11,9 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+<!-- 发版时请将本段扁平条目归一化为版本小节（发布亮点/新功能/改进/修复/文档/测试）并去重，避免如 3.28.0 文档小节般与同版本其它小节重复 -->
 - [改进] AIHubMix 注册与引流链接统一使用 inferera.com，改善中国大陆网络直连体验。
 - [修复] 单股推送模式在未配置通知渠道时仍会落盘本地个股报告；CLI 启动分析若因空股票列表、个股结果全失败或本地报告保存失败而未生成报告，会显式返回失败并记录原因。
 - [修复] 合并推送模式下即使个股汇总报告落盘失败，仍会先发送已有的合并通知；仅启用大盘复盘但最终未生成任何复盘内容时，分析任务会显式返回失败。
+- [修复] 主分析链路 LLM 调用新增默认超时 `LLM_CALL_TIMEOUT_SECONDS`（默认 180 秒，0 关闭），防止挂起的模型请求长时间占用分析线程；显式传入的超时配置不受影响。
+- [修复] 数据获取失败时的降级分析在结果与推送/渲染报告中追加显著“数据缺失声明”，避免仅基于新闻的结论被当作完整数据分析。
+- [修复] `python server.py` 默认改绑 `127.0.0.1`（沿用 `WEBUI_HOST`/`WEBUI_PORT`），并对公网绑定 + 未启用管理员认证的组合打印告警。
+- [修复] Docker 镜像 HEALTHCHECK 移除恒真 fallback，容器内 API 未监听时正确判为 unhealthy。
+- [修复] pipeline_v2 开启时 Web/API 触发大盘复盘改为提交后台任务并返回 `MarketReviewAccepted`（含 `task_id`，`pipeline_v2: true`），不再在请求线程内同步执行分钟级管线导致客户端 30s 超时；MCP 同步语义不变。
+- [修复] 桌面端：端口耗尽时正确显示错误页而非停留在加载页；错误页改用 `loadFile` 传参，兼容含空格的安装路径；主窗口增加 `will-navigate` 防护并限制 `openExternal` 仅放行 http(s)。
+- [修复] API 500 错误响应不再回传原始异常文本（分析、任务状态查询、portfolio 等入口），取证依赖服务端日志。
+- [修复] 非 US 市场周/月线取数改用换算后的日线根数（`days×5`/`days×22`）再本地重采样，修复 A/港股周月线指标根数不足的失真问题。
+- [改进] CI 顶层声明最小权限 `permissions: contents: read`；web-gate 新增 vitest 单测步骤，前端测试纳入门禁。
+- [修复] 修正 AlertRuleForm 市场区域选项测试与前后端实际契约（仅 cn/hk/us）不符的问题。
+- [改进] 清理 `src/scheduler.py` 中被遮蔽的重复 `_refresh_daily_schedule_if_needed` 定义及其独有的 `_configure_daily_task` 死代码。
+- [改进] 手动 Docker 发布 workflow（ghcr-dockerhub.yml）不再无条件覆盖 `latest` 标签并拒绝 latest 输入，补齐真实 revision 构建参数；正式发布仍走 docker-publish.yml。
+- [文档] 修正每日定时任务默认时间文档偏差为 18:30（北京时间），同步 README/README_CHT/full-guide（含 EN）/DEPLOY/DEPLOY_EN。
 
 ## [3.30.0] - 2026-08-09
 
@@ -152,11 +166,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### 文档
 
 - 修复文档中的失效相对链接。
-- [修复] #2026 外股代码映射到中文显示名时英文新闻相关性判定漏判：新增同源 STOCK_ENGLISH_NAME_MAP 单一真源、canonicalize_foreign_stock_code 规范化入口与 _foreign_english_query_terms 别名解析，使 AAPL/00700/BABA 等 ticker 即使 stock_name 为中文也能在查询构建、相关性打分与多维度情报路径上复用 canonical 英文名，并补齐 .US/.HK suffix / HK 前缀全形式的归类与回归用例；同时在 _score_news_relevance 对 alias 展开 term 做去重，避免 legal alias 展开短名与显式 short alias 重复计分。
-- [新功能] Tushare 数据源支持通过 `TUSHARE_HTTP_URL` 环境变量自定义接入地址，便于网络无法直达 `api.tushare.pro` 时切换自建网关或第三方兼容镜像；留空保持官方默认地址不变（fixes #1985）
-- [文档] `.env.example` 与 `.github/workflows/00-daily-analysis.yml` 同步映射 `TUSHARE_HTTP_URL`，避免出现"配置项有但 workflow 漏映射"的半修状态
-- [修复] #2051 PR Review 的特权 `pull_request_target` 流程不再检出 fork PR head：敏感文件、标签、报告与 AI 审查统一通过 GitHub API 将 PR 元数据和 diff 作为数据读取，只执行主分支可信脚本；Python 语法、Flake8、确定性检查和离线测试继续由无 secrets 的 `pull_request` CI / `backend-gate` 执行，兼容 `actions/checkout` 新增的 fork checkout 安全保护。
-- [修复] 修复 Windows 上 mimetypes 冷启动时读取注册表导致的进程卡死
 
 ## [3.27.0] - 2026-07-19
 
