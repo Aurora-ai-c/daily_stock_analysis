@@ -8,8 +8,8 @@ If any instruction in this file conflicts with `AGENTS.md`, follow `AGENTS.md`.
 
 - Respect directory boundaries:
   - Backend: `src/`, `data_provider/`, `api/`, `bot/`
-  - Web: `apps/dsa-web/`
-  - Desktop: `apps/dsa-desktop/`
+  - Web: `apps/client/web/`
+  - Desktop: `apps/client/electron/`
   - Deployment/workflows: `scripts/`, `.github/workflows/`, `docker/`
 - Do not run `git commit`, `git tag`, or `git push` without explicit user confirmation.
 - Before creating/updating PRs, PR review, or issue analysis, refresh the latest code baseline with `git fetch --all --prune`; if the worktree is clean and the current branch can fast-forward, run `git pull --ff-only`. If local changes, conflicts, missing upstream, or non-fast-forward history make that unsafe, do not stash/reset/overwrite local state; analyze against fetched remote refs or record the baseline gap before proceeding.
@@ -25,7 +25,7 @@ If any instruction in this file conflicts with `AGENTS.md`, follow `AGENTS.md`.
 ## Validation
 
 - Backend changes: prefer `./scripts/ci_gate.sh`; at minimum run `python -m py_compile` on changed Python files and the closest deterministic tests.
-- Web changes: run `cd apps/dsa-web && npm ci && npm run lint && npm run build`.
+- Web changes: run `cd apps/client/web && npm ci && npm run lint && npm run build`.
 - Desktop changes: build web first, then desktop if feasible.
 - Review work should prioritize CI evidence (`gh pr checks`, workflow logs) before re-running local validation.
 - AI governance changes: run `python scripts/check_ai_assets.py`.

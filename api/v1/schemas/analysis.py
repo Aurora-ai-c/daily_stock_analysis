@@ -166,6 +166,10 @@ class MarketReviewAccepted(BaseModel):
         None,
         description="任务 ID（仅当任务实际提交时返回）",
     )
+    pipeline_v2: bool = Field(
+        False,
+        description="是否由 pipeline_v2 五步管线执行（true 时凭 task_id 轮询任务状态）",
+    )
 
 
 class AnalysisResultResponse(BaseModel):

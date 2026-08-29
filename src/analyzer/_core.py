@@ -1729,6 +1729,8 @@ class AnalysisResult:
     data_sources: str = ""  # 数据来源说明
     success: bool = True
     error_message: Optional[str] = None
+    # 分析时无历史行情（降级为新闻/实时快照分析）；仅运行时用于报告标注，不持久化到 to_dict
+    data_missing: bool = False
 
     # ========== 价格数据（分析时快照）==========
     current_price: Optional[float] = None  # 分析时的股价
@@ -3127,6 +3129,13 @@ class GeminiAnalyzer:
         )
         requested_temperature = generation_config.get('temperature', 0.7)
         requested_timeout = generation_config.get("timeout")
+        if requested_timeout in (None, ""):
+            # 未显式传 timeout 时不设上限会回落到 litellm 默认 600s，单个挂起请求即可
+            # 长时间占满分析线程；默认 180s（LLM_CALL_TIMEOUT_SECONDS，0 关闭）。
+            # 显式传入的 timeout（如会话摘要 20s）不受影响。
+            default_timeout = getattr(config, "llm_call_timeout_seconds", 0)
+            if default_timeout and default_timeout > 0:
+                requested_timeout = default_timeout
 
         models_to_try = [config.litellm_model] + (config.litellm_fallback_models or [])
         models_to_try = [m for m in models_to_try if m]

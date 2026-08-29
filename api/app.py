@@ -194,7 +194,7 @@ _STOCK_INDEX_HEADERS = {
 
 
 def _bundled_stock_index_path() -> Path:
-    return Path(__file__).parent.parent / "apps" / "dsa-web" / "public" / _STOCK_INDEX_FILENAME
+    return Path(__file__).parent.parent / "apps" / "client" / "web" / "public" / _STOCK_INDEX_FILENAME
 
 
 async def _refresh_stock_index_cache_in_background(reason: str) -> None:
@@ -420,15 +420,12 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
 
             def _runner(mode: str = "full", date: Optional[str] = None) -> dict:
                 # 与 REST /market-review 的 v2 分支同一路径/同一锁语义(engine 单锁去重);
-                # FastMCP sync 工具已在线程池执行,同步调用不阻塞事件循环。
-                import json as _json
-
+                # MCP sync 工具保持同步语义:FastMCP sync 已在线程池执行,允许阻塞等待 run_id。
                 from src.config import get_config
 
-                from api.v1.endpoints.analysis import _run_pipeline_v2
+                from api.v1.endpoints.analysis import _execute_pipeline_v2
 
-                resp = _run_pipeline_v2(get_config())
-                return _json.loads(resp.body.decode("utf-8"))
+                return _execute_pipeline_v2(get_config())
 
             from src.services.pipeline.repository import PipelineRepository
 
@@ -482,7 +479,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
 <h1>&#9888;&#65039; Frontend Not Built</h1>
 <p>API is running, but the Web UI has not been built yet.</p>
 <p>Build the frontend first:</p>
-<p><code>cd apps/dsa-web &amp;&amp; npm install &amp;&amp; npm run build</code></p>
+<p><code>cd apps/client/web &amp;&amp; npm install &amp;&amp; npm run build</code></p>
 <p>Or start with auto-build:</p>
 <p><code>python main.py --serve-only</code></p>
 <div class="hint"><p>If you only need the API, visit <a href="/docs">/docs</a> for the interactive API documentation.</p></div>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+<title>启动失败</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0c0c10; color: #e6c0c0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .box { max-width: 720px; margin: 12vh auto; padding: 24px 28px; border: 1px solid #3a2326; border-radius: 10px; background: #151012; }
+  h2 { margin-top: 0; color: #ff8a8a; }
+  #msg { white-space: pre-wrap; line-height: 1.5; }
+  .log { color: #8a93a3; font-size: 13px; }
+  .log span { color: #c9d4e3; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h2>客户端启动失败</h2>
+    <p id="msg"></p>
+    <p class="log">日志路径：<span id="log"></span></p>
+  </div>
+  <script>
+    const p = new URLSearchParams(location.search);
+    document.getElementById('msg').textContent = p.get('message') || '未知错误';
+    document.getElementById('log').textContent = p.get('log') || 'n/a';
+  </script>
+</body>
+</html>

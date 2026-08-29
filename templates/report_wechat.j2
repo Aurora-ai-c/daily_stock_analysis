@@ -4,6 +4,10 @@
 {% if market_status_line %}
 > {{ market_status_line }}{% if data_date %} | {{ labels.data_date_label }}：{{ data_date }}{% endif %}
 {% endif %}
+{% if data_missing_banner %}
+
+{{ data_missing_banner }}
+{% endif %}
 
 {% if summary_only %}
 **📊 {{ labels.summary_heading }}**

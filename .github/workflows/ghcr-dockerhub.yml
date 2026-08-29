@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Image tag version (e.g., v1.0.0, latest)'
+        description: 'Versioned image tag (e.g., v1.0.0). Use "Docker Release Publish" for releases/latest.'
         required: true
         default: 'v1.0.0'
 
@@ -38,6 +38,17 @@ jobs:
             echo "image_tag must not contain spaces"
             exit 1
           fi
+          if [[ "${{ inputs.image_tag }}" == "latest" ]]; then
+            echo "This manual flow publishes the dispatched commit without the release gate;"
+            echo "it must not move the 'latest' tag. Use docker-publish.yml for releases."
+            exit 1
+          fi
+
+      - name: Resolve build metadata
+        id: build_meta
+        run: |
+          set -euo pipefail
+          echo "revision=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -72,7 +83,6 @@ jobs:
           images: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}
           tags: |
             type=raw,value=${{ inputs.image_tag }}
-            type=raw,value=latest
           flavor: |
             latest=false
 
@@ -83,7 +93,6 @@ jobs:
           images: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}
           tags: |
             type=raw,value=${{ inputs.image_tag }}
-            type=raw,value=latest
           flavor: |
             latest=false
 
@@ -111,6 +120,8 @@ jobs:
             ${{ steps.meta-ghcr.outputs.tags }}
             ${{ steps.meta-dockerhub.outputs.tags }}
           labels: ${{ steps.meta-ghcr.outputs.labels }}
+          build-args: |
+            DSA_WEB_REVISION=${{ steps.build_meta.outputs.revision }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -120,7 +131,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- GHCR: \`${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Docker Hub: \`${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Tags: ${{ inputs.image_tag }}, latest" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tags: ${{ inputs.image_tag }} (latest tag is intentionally not moved by this manual flow)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Platforms: linux/amd64, linux/arm64" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Pull commands" >> "$GITHUB_STEP_SUMMARY"

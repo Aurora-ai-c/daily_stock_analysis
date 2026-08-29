@@ -190,7 +190,7 @@ docker pull ghcr.io/zhulinsen/daily_stock_analysis:v3.12.0
 在确认本地前端打包链路时，建议执行以下命令作为最小验证闭环：
 
 ```bash
-cd apps/dsa-web
+cd apps/client/web
 npm ci
 npm run lint
 npm run build
@@ -265,7 +265,7 @@ docker-compose -f ./docker/docker-compose.yml up -d
 **直接部署用户**：先确保已安装 Node.js 18+（推荐 20+），然后手动构建前端：
 
 ```bash
-cd apps/dsa-web
+cd apps/client/web
 npm ci
 npm run build
 cd ../..

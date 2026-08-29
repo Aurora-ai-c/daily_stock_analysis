@@ -1,0 +1,10 @@
+{
+  "name": "Daily Stock Analysis",
+  "short_name": "DSA",
+  "description": "本地优先一体化股票分析客户端",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080c",
+  "theme_color": "#08080c",
+  "icons": []
+}

@@ -511,7 +511,8 @@ def _handle_sync_analysis(
         raise
     except Exception as e:
         logger.error(f"分析失败: {e}", exc_info=True)
-        raise api_error(500, "internal_error", f"分析过程发生错误: {str(e)}")
+        # 不回传原始异常文本（可能含内部路径/供应商报错细节），取证依赖服务端日志
+        raise api_error(500, "internal_error", "分析过程发生内部错误，请稍后重试；详情见服务端日志")
 
 
 # ============================================================
@@ -533,15 +534,14 @@ def _build_pipeline_v2_engine(config: Config, *, manager=None) -> Any:
     return PipelineEngine(repo=repo, runs_dir=runs_dir, manager=manager)
 
 
-def _run_pipeline_v2(config: Config, *, manager=None) -> JSONResponse:
-    """flag 开时同步跑五步管线并返回 202 + run_id(新管线不走任务队列)。
+def _execute_pipeline_v2(config: Config, *, manager=None) -> Dict[str, Any]:
+    """同步执行一次 v2 五步管线，返回 {run_id, pipeline_v2, reused}。
 
-    并发去重(用户裁定):同 (mode,date) 已有 active run 时 engine 只复用其 run_id 不重跑,
-    响应体附 reused: true 以便区分。
+    MCP sync 工具走本函数（FastMCP 已在线程池执行，允许阻塞）；REST 端点经
+    _run_pipeline_v2 包装为后台任务提交，不在请求线程内等待分钟级管线。
     """
     from src.services.pipeline.engine import ReplayMode
 
-    logger.info("[MarketReview] component=pipeline_v2 action=submit trigger_source=api")
     engine = _build_pipeline_v2_engine(config, manager=manager)
     date = datetime.now().strftime("%Y-%m-%d")
     reused = engine.repo.find_active_run(mode="market_review", date=date) is not None
@@ -555,13 +555,68 @@ def _run_pipeline_v2(config: Config, *, manager=None) -> JSONResponse:
         )
     except Exception as exc:  # noqa: BLE001
         logger.error("[MarketReview] component=pipeline_v2 action=failed", exc_info=True)
-        raise api_error(500, "pipeline_v2_failed", f"v2 管线执行失败: {exc}") from exc
+        raise api_error(500, "pipeline_v2_failed", "v2 管线执行失败，详情见服务端日志") from exc
     logger.info("[MarketReview] component=pipeline_v2 action=accepted run_id=%s reused=%s",
                 run_id, reused)
-    content = {"run_id": run_id, "pipeline_v2": True}
+    content: Dict[str, Any] = {"run_id": run_id, "pipeline_v2": True}
     if reused:
         content["reused"] = True
-    return JSONResponse(status_code=202, content=content)
+    return content
+
+
+def _read_pipeline_v2_report_text(config: Config, run_id: Optional[str]) -> Optional[str]:
+    """读取 v2 管线产物 report.md，用于回填任务结果（与 v1 轮询契约对齐）。"""
+    if not run_id:
+        return None
+    report_path = Path(config.database_path).parent / "pipeline" / "runs" / str(run_id) / "report.md"
+    try:
+        text = report_path.read_text(encoding="utf-8")
+    except OSError:
+        logger.warning(
+            "[MarketReview] component=pipeline_v2 action=read_report_failed run_id=%s", run_id
+        )
+        return None
+    return text if text.strip() else None
+
+
+def _run_pipeline_v2(config: Config, *, manager=None) -> MarketReviewAccepted:
+    """flag 开时把五步管线提交为后台任务，立即返回 202 + task_id。
+
+    与 v1 分支共用任务队列生命周期：执行离开请求线程后，分钟级管线不再拖穿
+    客户端 30s 超时；前端凭 task_id 轮询任务状态（与 v1 一致）。run_id 由后台
+    执行时生成（engine 内置 (mode,date) 去重防重复执行），提交时不可知。
+    """
+    logger.info("[MarketReview] component=pipeline_v2 action=submit trigger_source=api")
+    task_id = uuid.uuid4().hex
+
+    def _run_and_collect() -> Dict[str, Any]:
+        content = _execute_pipeline_v2(config, manager=manager)
+        region = normalize_market_review_region_lenient(config.market_review_region) or "cn"
+        result: Dict[str, Any] = {"region": region, **content}
+        report_text = _read_pipeline_v2_report_text(config, content.get("run_id"))
+        if report_text:
+            # v1 契约：status 端点从 task.result["result"] 提取复盘正文供前端展示
+            result["result"] = report_text
+        return result
+
+    task = get_task_queue().submit_background_task(
+        _run_and_collect,
+        stock_code="market_review",
+        stock_name="大盘复盘",
+        message="大盘复盘任务已提交（pipeline_v2）",
+        task_id=task_id,
+    )
+    region = normalize_market_review_region_lenient(config.market_review_region) or "cn"
+    return MarketReviewAccepted(
+        status="accepted",
+        message="大盘复盘任务已提交，完成后会保存报告并按配置推送通知",
+        # v2 管线的推送行为由 engine/pusher 按配置决定，此处如实反映默认会推送
+        send_notification=True,
+        region=region,
+        task_id=task.task_id,
+        trace_id=_get_task_trace_id(task),
+        pipeline_v2=True,
+    )
 
 @router.post(
     "/market-review",
@@ -584,7 +639,7 @@ def trigger_market_review(
 
     runtime_config = _with_request_report_language(config, request.report_language)
 
-    # v2 五步管线 flag(Part B):开启时直接同步执行新管线,不再入任务队列
+    # v2 五步管线 flag(Part B):开启时提交为后台任务(与 v1 共用任务队列),立即返回 202
     if getattr(runtime_config, "pipeline_v2_enabled", False):
         return _run_pipeline_v2(runtime_config)
 
@@ -866,7 +921,7 @@ def get_task_run_flow(task_id: str) -> RunFlowSnapshot:
             return history_snapshot
     except Exception as e:
         logger.error(f"查询任务运行流失败: {e}", exc_info=True)
-        raise api_error(500, "internal_error", f"查询任务运行流失败: {str(e)}")
+        raise api_error(500, "internal_error", "查询任务运行流失败，详情见服务端日志")
 
     raise api_error(404, "not_found", f"任务 {task_id} 不存在或已过期")
 
@@ -1317,7 +1372,7 @@ def get_analysis_status(task_id: str) -> TaskStatus:
 
     except Exception as e:
         logger.error(f"查询任务状态失败: {e}", exc_info=True)
-        raise api_error(500, "internal_error", f"查询任务状态失败: {str(e)}")
+        raise api_error(500, "internal_error", "查询任务状态失败，详情见服务端日志")
 
     # 3. 任务不存在
     raise api_error(404, "not_found", f"任务 {task_id} 不存在或已过期")

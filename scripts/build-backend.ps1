@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 Write-Host 'Building React UI (static assets)...'
-Push-Location 'apps\dsa-web'
+Push-Location 'apps\client\web'
 if (!(Test-Path 'node_modules')) {
   npm install
 }

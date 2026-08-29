@@ -86,10 +86,10 @@ def test_pyinstaller_runtime_hook_disables_incompatible_nltk_guard(
 
 def test_macos_unsigned_packaging_contract_is_explicit() -> None:
     package = json.loads(
-        _read_text(REPO_ROOT / "apps" / "dsa-desktop" / "package.json")
+        _read_text(REPO_ROOT / "apps" / "client" / "electron" / "package.json")
     )
     after_pack_hook = _read_text(
-        REPO_ROOT / "apps" / "dsa-desktop" / "scripts" / "afterPackMacos.js"
+        REPO_ROOT / "apps" / "client" / "electron" / "scripts" / "afterPackMacos.js"
     )
     backend_script = _read_text(REPO_ROOT / "scripts" / "build-backend-macos.sh")
     desktop_script = _read_text(REPO_ROOT / "scripts" / "build-desktop-macos.sh")

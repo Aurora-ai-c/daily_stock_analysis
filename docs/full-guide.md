@@ -17,7 +17,7 @@ daily_stock_analysis/
 ├── data_provider/       # 多数据源适配器
 ├── bot/                 # 机器人交互模块
 ├── api/                 # FastAPI 后端服务
-├── apps/dsa-web/        # React 前端
+├── apps/client/web/        # React 前端
 ├── docker/              # Docker 配置
 ├── docs/                # 项目文档
 └── .github/workflows/   # GitHub Actions
@@ -220,7 +220,7 @@ daily_stock_analysis/
 
 ### 5. 完成！
 
-默认每个工作日 **18:00（北京时间）** 自动执行。
+默认每个工作日 **18:30（北京时间）** 自动执行（对应 workflow 内的 UTC cron `30 10 * * 1-5`）。
 
 ---
 
@@ -495,7 +495,7 @@ daily_stock_analysis/
 
 Dockerfile 使用多阶段构建，前端会在构建镜像时自动打包并内置到 `static/`。
 如需覆盖静态资源，可挂载本地 `static/` 到容器内 `/app/static`。
-运行中的 `server` 容器默认直接复用 `/app/static` 里的预构建产物，不要求容器内保留 `apps/dsa-web` 源码目录或运行时安装 `npm`；若 WebUI 无法打开，请优先确认 `/app/static/index.html` 是否存在。
+运行中的 `server` 容器默认直接复用 `/app/static` 里的预构建产物，不要求容器内保留 `apps/client/web` 源码目录或运行时安装 `npm`；若 WebUI 无法打开，请优先确认 `/app/static/index.html` 是否存在。
 
 当前官方镜像发布地址：
 
@@ -739,7 +739,7 @@ OpenD 默认地址为 `127.0.0.1:11111`，可用 `FUTU_OPEND_HOST` / `FUTU_OPEND
 ```yaml
 schedule:
   # UTC 时间，北京时间 = UTC + 8
-  - cron: '0 10 * * 1-5'   # 周一到周五 18:00（北京时间）
+  - cron: '30 10 * * 1-5'  # 周一到周五 18:30（北京时间）
 ```
 
 常用时间对照：
@@ -1263,7 +1263,7 @@ PUSHOVER_API_TOKEN=your_api_token
    - **macOS**：`brew install wkhtmltopdf`
    - **Debian/Ubuntu**：`apt install wkhtmltopdf`
 3. **markdown-to-file**（可选，emoji 支持更好）：`npm i -g markdown-to-file`，并设置 `MD2IMG_ENGINE=markdown-to-file`
-4. **Playwright**（可选，适合 Web 服务）：在 `apps/dsa-web` 执行 `npm ci` 和 `npx playwright install chromium`，并设置 `MD2IMG_ENGINE=playwright`
+4. **Playwright**（可选，适合 Web 服务）：在 `apps/client/web` 执行 `npm ci` 和 `npx playwright install chromium`，并设置 `MD2IMG_ENGINE=playwright`
 
 未安装或安装失败时，将自动回退为 Markdown 文本发送。
 

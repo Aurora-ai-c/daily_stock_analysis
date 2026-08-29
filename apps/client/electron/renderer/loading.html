@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+<title>Daily Stock Analysis</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #08080c; color: #c9d4e3; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  .spinner { width: 42px; height: 42px; border: 4px solid #1d2738; border-top-color: #4f8cff; border-radius: 50%; animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .title { font-size: 15px; letter-spacing: 0.4px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner"></div>
+    <div class="title">正在启动分析引擎…</div>
+  </div>
+</body>
+</html>

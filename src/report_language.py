@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from src.schemas.decision_scale import signal_key_for_score
 
@@ -853,6 +853,29 @@ def get_no_data_text(language: Optional[str]) -> str:
 def get_chip_unavailable_text(language: Optional[str]) -> str:
     """Return the localized one-line chip distribution fallback text."""
     return _CHIP_UNAVAILABLE_BY_LANGUAGE[normalize_report_language(language)]
+
+
+def format_data_missing_banner(missing_names: List[str], language: Optional[str]) -> str:
+    """Return the localized report banner shown when daily-bar data was unavailable.
+
+    降级分析的透明化声明：行情/技术指标获取失败时，报告必须显式告知结论仅基于
+    新闻与实时快照，避免被读者当成完整数据支撑的投资建议。
+    """
+    normalized = normalize_report_language(language)
+    joined = ", ".join(missing_names) if normalized == "en" else "、".join(missing_names)
+    if normalized == "en":
+        return (
+            f"⚠️ **Data missing for {joined}**: market/indicator data was unavailable; "
+            "conclusions are based on news and the realtime snapshot only — verify before acting."
+        )
+    if normalized == "ko":
+        return (
+            f"⚠️ **{joined} 데이터 누락**: 시세/지표 데이터를 가져올 수 없어 뉴스와 실시간 스냅샷만으로 분석했습니다. 신중하게 참고하세요."
+        )
+    return (
+        f"⚠️ **数据缺失声明**：{joined} 的行情/技术指标数据获取失败，本报告仅基于新闻与实时快照降级分析，"
+        "结论可信度受限，请谨慎参考。"
+    )
 
 
 def _normalize_lookup_key(value: Any) -> str:

@@ -21,6 +21,7 @@ from src.report_language import (
     get_report_labels,
     get_signal_level,
     get_chip_unavailable_reason,
+    format_data_missing_banner,
     is_chip_structure_unavailable,
     localize_chip_health,
     localize_conflict_severity,
@@ -225,6 +226,16 @@ def render(
                     return line
         return ""
 
+    def data_missing_banner() -> str:
+        missing_names = [
+            f"{getattr(result, 'name', '')}({result.code})"
+            for result in (results or [])
+            if getattr(result, "data_missing", False)
+        ]
+        if not missing_names:
+            return ""
+        return format_data_missing_banner(missing_names, report_language)
+
     context: Dict[str, Any] = {
         "report_date": report_date,
         "report_timestamp": report_timestamp,
@@ -239,6 +250,7 @@ def render(
         "models_used": models_used,
         "show_llm_model": show_llm_model,
         "market_status_line": market_status_line(),
+        "data_missing_banner": data_missing_banner(),
         "data_date": data_date,
         "escape_md": _escape_md,
         "clean_sniper": _clean_sniper_value,

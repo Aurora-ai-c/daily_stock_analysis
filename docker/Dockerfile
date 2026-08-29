@@ -7,14 +7,14 @@
 
 FROM node:20-slim AS web-builder
 
-WORKDIR /app/apps/dsa-web
+WORKDIR /app/apps/client/web
 ARG DSA_WEB_VERSION=0.0.0
 ARG DSA_WEB_REVISION=unknown
 
-COPY apps/dsa-web/package.json apps/dsa-web/package-lock.json ./
+COPY apps/client/web/package.json apps/client/web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 
-COPY apps/dsa-web/ ./
+COPY apps/client/web/ ./
 RUN DSA_WEB_VERSION="${DSA_WEB_VERSION}" DSA_WEB_REVISION="${DSA_WEB_REVISION}" npm run build
 
 # Pin to bookworm: wkhtmltopdf was removed from Debian testing (2025)
@@ -91,10 +91,9 @@ EXPOSE 8000
 # 数据卷（持久化数据）
 VOLUME ["/app/data", "/app/logs", "/app/reports"]
 
-# 健康检查（FastAPI 模式）
+# 健康检查（FastAPI 模式；compose 默认以 --serve-only 启动，API 未监听时应判为 unhealthy）
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || curl -f http://localhost:8000/health \
-    || python -c "import sys; sys.exit(0)"
+    CMD curl -f http://localhost:8000/api/health || curl -f http://localhost:8000/health
 
 # 启动入口先修复 bind mount 目录权限，再降权为 dsa 执行应用；
 # 文档化 docker-compose exec 命令需显式使用 -u dsa，避免手动进程写入 root-owned 文件。

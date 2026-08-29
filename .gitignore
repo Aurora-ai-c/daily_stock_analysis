@@ -85,18 +85,24 @@ verify_*.py
 
 # ignore static files
 /static/
-/apps/dsa-desktop/dist/
-/apps/dsa-desktop/node_modules/
+/apps/client/electron/dist/
+/apps/client/electron/node_modules/
 /node_modules/
 docs/specs/
 
 # 心跳续命:meta/heartbeat 分支 push 专用 worktree(本地残留时禁止误提交)
 /.heartbeat-wt
 
+# AI agent 会话记录(仅根目录,可能含大体积对话内容与敏感上下文)
+/ses_*.json
+
+# ZCode 本地会话产物(计划/暂存等,非源码)
+/.zcode/
+
 .worktrees/
 
 # PyInstaller 构建产物
-apps/dsa-cloud-client/dsa_client.spec
+dist/backend/
 
 # 客户端运行时状态(缓存/配置, 非源码)
-apps/dsa-cloud-client/data/
+apps/client/electron/dist/

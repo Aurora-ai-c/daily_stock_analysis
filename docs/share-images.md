@@ -41,7 +41,7 @@ Electron 桌面端同样展示“分享”按钮，但不依赖额外分发 `wkh
 Web 手工生成不受 `MARKDOWN_TO_IMAGE_CHANNELS` 限制，但服务端仍需配置可用的 `MD2IMG_ENGINE`。桌面端手工生成复用 Electron，不读取 `MD2IMG_ENGINE`。Web 使用 Playwright 时先执行：
 
 ```bash
-cd apps/dsa-web
+cd apps/client/web
 npm ci
 npx playwright install chromium
 ```

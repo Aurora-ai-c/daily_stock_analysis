@@ -1011,7 +1011,8 @@ class DataFetcherManager:
                     stock_code=stock_code,
                     start_date=start_date,
                     end_date=end_date,
-                    days=days
+                    # 周/月线需取足够日线再本地重采样（与上方美股路径一致）
+                    days=fetch_days
                 )
                 
                 if df is not None and not df.empty:

@@ -342,7 +342,7 @@ deploy:
   ```bash
   # 安装 Node.js 18+（推荐 20+，如尚未安装）
   # 构建前端
-  cd apps/dsa-web
+  cd apps/client/web
   npm ci
   npm run build
   cd ../..
@@ -470,7 +470,7 @@ git push
 
 ### 定时说明
 
-默认配置：**周一到周五，北京时间 18:00** 自动执行
+默认配置：**周一到周五，北京时间 18:30** 自动执行
 
 修改时间：编辑 `.github/workflows/00-daily-analysis.yml` 中的 cron 表达式：
 

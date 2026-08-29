@@ -1,0 +1,25 @@
+use_default_settings: false
+
+general:
+  instance_name: "DSA-Local"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+search:
+  formats:
+    - json
+  safe_search: 0
+  autocomplete: ""
+  default_lang: ""
+
+engines:
+  keep_only:
+    - baidu
+    - bing
+    - duckduckgo
+    - google
+    - sogou
+    - yandex
+    - wikipedia

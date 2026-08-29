@@ -426,7 +426,7 @@ git push
 
 ### Schedule Details
 
-Default configuration: **Monday to Friday, 18:00 Beijing Time** auto-execution
+Default configuration: **Monday to Friday, 18:30 Beijing Time** auto-execution
 
 Modify time: Edit cron expression in `.github/workflows/00-daily-analysis.yml`:
 

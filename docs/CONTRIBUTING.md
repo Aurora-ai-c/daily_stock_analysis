@@ -92,8 +92,8 @@ pip install -r requirements.txt
 pip install flake8 pytest
 ./scripts/ci_gate.sh
 
-# 前端 gate（如修改了 apps/dsa-web）
-cd apps/dsa-web
+# 前端 gate（如修改了 apps/client/web）
+cd apps/client/web
 npm ci
 npm run lint
 npm run build

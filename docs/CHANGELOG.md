@@ -5,13 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-> For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
+> For user-friendly release highlights, see the [GitHub Releases](https://github.com/Aurora-ai-c/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
 
+- [破坏性] 三端合一：移除 `dsa-cloud-client` 与 `dsa-desktop`，统一为本地优先桌面客户端 `apps/client`（Electron 壳 + Web + PyInstaller 冻结后端）。SearXNG 本地一键、移动端 PWA/隧道远程、发布仓库统一为 `Aurora-ai-c/daily_stock_analysis`；旧客户端价格监控/自选股/IM 直发能力并入后端 `src/services/` 层。
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 <!-- 发版时请将本段扁平条目归一化为版本小节（发布亮点/新功能/改进/修复/文档/测试）并去重，避免如 3.28.0 文档小节般与同版本其它小节重复 -->
+- [新功能] 云客户端(dsa-cloud-client)v0.7.0:报告与 AlphaEvo 策略信号内嵌渲染(此前仅可下载 artifact zip)、自选股逐只增删与代码校验去重、客户端本地价格监控(腾讯/stooq 免费行情轮询 + 涨跌幅/价格阈值/信号卡派生规则 + 30 分钟冷却 + Windows 通知,可选 IM webhook 直发)。
 - [改进] AIHubMix 注册与引流链接统一使用 inferera.com，改善中国大陆网络直连体验。
 - [修复] 单股推送模式在未配置通知渠道时仍会落盘本地个股报告；CLI 启动分析若因空股票列表、个股结果全失败或本地报告保存失败而未生成报告，会显式返回失败并记录原因。
 - [修复] 合并推送模式下即使个股汇总报告落盘失败，仍会先发送已有的合并通知；仅启用大盘复盘但最终未生成任何复盘内容时，分析任务会显式返回失败。
@@ -19,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 数据获取失败时的降级分析在结果与推送/渲染报告中追加显著“数据缺失声明”，避免仅基于新闻的结论被当作完整数据分析。
 - [修复] `python server.py` 默认改绑 `127.0.0.1`（沿用 `WEBUI_HOST`/`WEBUI_PORT`），并对公网绑定 + 未启用管理员认证的组合打印告警。
 - [修复] Docker 镜像 HEALTHCHECK 移除恒真 fallback，容器内 API 未监听时正确判为 unhealthy。
-- [修复] pipeline_v2 开启时 Web/API 触发大盘复盘改为提交后台任务并返回 `MarketReviewAccepted`（含 `task_id`，`pipeline_v2: true`），不再在请求线程内同步执行分钟级管线导致客户端 30s 超时；MCP 同步语义不变。
+- [修复] pipeline_v2 开启时 Web/API 触发大盘复盘改为提交后台任务并返回 `MarketReviewAccepted`（含 `task_id`，`pipeline_v2: true`），不再在请求线程内同步执行分钟级管线导致客户端 30s 超时；任务结果按 v1 轮询契约回填复盘正文，MCP 同步语义不变。
 - [修复] 桌面端：端口耗尽时正确显示错误页而非停留在加载页；错误页改用 `loadFile` 传参，兼容含空格的安装路径；主窗口增加 `will-navigate` 防护并限制 `openExternal` 仅放行 http(s)。
 - [修复] API 500 错误响应不再回传原始异常文本（分析、任务状态查询、portfolio 等入口），取证依赖服务端日志。
 - [修复] 非 US 市场周/月线取数改用换算后的日线根数（`days×5`/`days×22`）再本地重采样，修复 A/港股周月线指标根数不足的失真问题。

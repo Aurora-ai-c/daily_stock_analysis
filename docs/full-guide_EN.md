@@ -17,7 +17,7 @@ daily_stock_analysis/
 ├── data_provider/       # Multi-source data adapters
 ├── bot/                 # Bot interaction module
 ├── api/                 # FastAPI backend service
-├── apps/dsa-web/        # React frontend
+├── apps/client/web/        # React frontend
 ├── docker/              # Docker configuration
 ├── docs/                # Project documentation
 └── .github/workflows/   # GitHub Actions
@@ -438,7 +438,7 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 
 ## Docker Deployment
 
-The image uses prebuilt frontend assets under `/app/static` at runtime, so the running `server` container does not require the `apps/dsa-web` source tree or runtime `npm`. If WebUI cannot be opened after Docker deployment, first verify that `/app/static/index.html` exists inside the container.
+The image uses prebuilt frontend assets under `/app/static` at runtime, so the running `server` container does not require the `apps/client/web` source tree or runtime `npm`. If WebUI cannot be opened after Docker deployment, first verify that `/app/static/index.html` exists inside the container.
 
 Official image registries:
 
@@ -679,7 +679,7 @@ Edit `.github/workflows/00-daily-analysis.yml`:
 ```yaml
 schedule:
   # UTC time, Beijing time = UTC + 8
-  - cron: '0 10 * * 1-5'   # Monday to Friday 18:00 (Beijing Time)
+  - cron: '30 10 * * 1-5'  # Monday to Friday 18:30 (Beijing Time)
 ```
 
 Common time reference:

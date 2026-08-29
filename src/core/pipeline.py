@@ -807,6 +807,9 @@ class StockAnalysisPipeline:
                 realtime_data = enhanced_context.get('realtime', {})
                 result.current_price = realtime_data.get('price')
                 result.change_pct = realtime_data.get('change_pct')
+                # 数据获取失败时上下文会带 data_missing 标记（Step 5 fallback），
+                # 透传到结果供报告生成器在头部追加降级声明
+                result.data_missing = bool(enhanced_context.get('data_missing'))
 
             # Step 7.6: chip_structure fallback (Issue #589) and unavailable collapse
             if result:

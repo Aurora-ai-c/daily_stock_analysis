@@ -42,7 +42,7 @@ def _resolve_playwright_command() -> Optional[str]:
 
     repository_root = Path(__file__).resolve().parent.parent
     executable_name = "playwright.cmd" if os.name == "nt" else "playwright"
-    local_command = repository_root / "apps" / "dsa-web" / "node_modules" / ".bin" / executable_name
+    local_command = repository_root / "apps" / "client" / "web" / "node_modules" / ".bin" / executable_name
     if local_command.is_file():
         return str(local_command)
     return None
@@ -58,7 +58,7 @@ def _markdown_to_image_playwright(
     if playwright_command is None:
         logger.warning(
             "Playwright CLI not found. Install Web dependencies with: "
-            "cd apps/dsa-web && npm ci. Fallback to text."
+            "cd apps/client/web && npm ci. Fallback to text."
         )
         return None
 

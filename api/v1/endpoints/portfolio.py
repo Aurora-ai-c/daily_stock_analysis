@@ -56,7 +56,8 @@ def _bad_request(exc: Exception) -> HTTPException:
 
 def _internal_error(message: str, exc: Exception) -> HTTPException:
     logger.error(f"{message}: {exc}", exc_info=True)
-    return api_error(500, "internal_error", f"{message}: {str(exc)}")
+    # 不回传原始异常文本（可能含内部路径/供应商报错细节），取证依赖服务端日志
+    return api_error(500, "internal_error", f"{message}，详情见服务端日志")
 
 
 def _conflict_error(*, error: str, message: str) -> HTTPException:

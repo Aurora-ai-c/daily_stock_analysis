@@ -42,6 +42,7 @@ from src.report_language import (
     get_report_labels,
     get_signal_level,
     get_chip_unavailable_reason,
+    format_data_missing_banner,
     is_chip_structure_unavailable,
     localize_chip_health,
     localize_conflict_severity,
@@ -472,6 +473,22 @@ class NotificationService(
             lines.extend([status_line, ""])
         elif lines and lines[-1] != "":
             lines.append("")
+
+    def _append_data_missing_banner(
+        self,
+        lines: List[str],
+        results: List[AnalysisResult],
+        report_language: str,
+    ) -> None:
+        """数据缺失降级时在报告头部追加显著声明（与渲染器模板 banner 文案一致）。"""
+        missing_names = [
+            f"{self._get_display_name(r, report_language)}({r.code})"
+            for r in results
+            if getattr(r, "data_missing", False)
+        ]
+        if not missing_names:
+            return
+        lines.extend([format_data_missing_banner(missing_names, report_language), ""])
 
     def _should_show_llm_model(self) -> bool:
         return bool(getattr(self._config, "report_show_llm_model", self._report_show_llm_model))
@@ -1305,6 +1322,7 @@ class NotificationService(
             f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count}",
         ]
         self._append_market_status_line(report_lines, results, report_language)
+        self._append_data_missing_banner(report_lines, results, report_language)
 
         # === 新增：分析结果摘要 (Issue #112) ===
         if results:
@@ -1901,6 +1919,7 @@ class NotificationService(
             f"> {len(results)} {labels['stock_unit_compact']} | 🟢{buy_count} 🟡{hold_count} 🔴{sell_count}",
         ]
         self._append_market_status_line(lines, results, report_language)
+        self._append_data_missing_banner(lines, results, report_language)
         for r in sorted_results:
             signal_text, emoji, _ = self._get_signal_level(r)
             name = self._get_display_name(r, report_language)
@@ -1949,6 +1968,8 @@ class NotificationService(
             f"> {report_date} | {labels['score_label']}: **{result.sentiment_score}** | {localize_trend_prediction(result.trend_prediction, report_language)}",
             "",
         ]
+
+        self._append_data_missing_banner(lines, [result], report_language)
 
         excerpt = self._public_phase_pack_excerpt(result, report_language)
         if excerpt:

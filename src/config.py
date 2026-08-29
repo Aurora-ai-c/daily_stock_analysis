@@ -907,6 +907,10 @@ class Config:
     litellm_model: str = ""  # Primary model; must include provider prefix when set explicitly
     litellm_fallback_models: List[str] = field(default_factory=list)  # Cross-model fallback list
 
+    # Per-call LLM timeout in seconds for the main analysis chain (LLM_CALL_TIMEOUT_SECONDS).
+    # Explicit generation_config["timeout"] still wins; 0 disables the default (legacy behavior).
+    llm_call_timeout_seconds: int = 180
+
     # Unified temperature for all LLM calls (LLM_TEMPERATURE); legacy per-provider temps are fallback only
     llm_temperature: float = 0.7
 
@@ -1807,6 +1811,10 @@ class Config:
             opencode_cli_model=opencode_cli_model,
             litellm_model=litellm_model,
             litellm_fallback_models=litellm_fallback_models,
+            llm_call_timeout_seconds=parse_env_int(
+                os.getenv('LLM_CALL_TIMEOUT_SECONDS'), 180,
+                field_name='LLM_CALL_TIMEOUT_SECONDS', minimum=0, maximum=3600,
+            ),
             llm_temperature=resolve_unified_llm_temperature(litellm_model),
             litellm_config_path=litellm_config_path,
             llm_models_source=llm_models_source,

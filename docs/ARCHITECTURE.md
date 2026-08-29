@@ -37,8 +37,7 @@ GitHub Artifacts + run_state.json (健康/预算)
 - `data_provider/self_test.py`：离线诊断 CLI（配置 + 熔断状态；`--probe` 实时探测）。
 - `data_provider/realtime_types.py`：熔断器，阈值由环境变量控制（见 OPS）。
 - `src/services/stock_service.py::get_history_data`：支持 weekly/monthly（不再抛 `ValueError`）。
-- `apps/dsa-cloud-client/dsa_client/state_store.py`：`run_state.json` + `spend.json` + `evaluate_budget()` / `refresh_budget_flag()`（非阻塞告警）。
-- `apps/dsa-cloud-client/dsa_client/server.py`：`/api/status`（含预算/数据源健康）、`/api/budget`。
+- 统一桌面客户端位于 `apps/client/`（Electron 壳 `apps/client/electron` + Web `apps/client/web`），本地拉起 PyInstaller 冻结后端，SearXNG 本地一键，移动端可经 PWA/隧道远程访问；原 `dsa-cloud-client` 的预算/状态接口能力已并入后端 `api/` 与 `src/services/`。
 
 ## 测试分层
 

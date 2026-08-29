@@ -11,6 +11,10 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# 最小权限：CI 内所有 job 只读仓库内容即可完成（构建缓存走 Actions cache 服务）。
+permissions:
+  contents: read
+
 jobs:
   changes:
     name: 🔎 Change Detection
@@ -31,9 +35,9 @@ jobs:
             backend_web_contract:
               # Public assets are shared runtime inputs: Python loaders and
               # packaged deployments may consume them outside the Web app.
-              - 'apps/dsa-web/public/**'
-              - 'apps/dsa-web/src/components/settings/llmProviderTemplates.ts'
-              - 'apps/dsa-web/src/locales/settingsHelp.ts'
+              - 'apps/client/web/public/**'
+              - 'apps/client/web/src/components/settings/llmProviderTemplates.ts'
+              - 'apps/client/web/src/locales/settingsHelp.ts'
             docker:
               - '*.py'
               - 'api/**'
@@ -41,13 +45,13 @@ jobs:
               - 'data_provider/**'
               - 'src/**'
               - 'strategies/**'
-              - 'apps/dsa-web/**'
+              - 'apps/client/web/**'
               - 'docker/**'
               - 'requirements.txt'
               - '.dockerignore'
               - '.github/workflows/ci.yml'
             frontend:
-              - 'apps/dsa-web/**'
+              - 'apps/client/web/**'
             futu_packaging:
               - 'requirements.txt'
               - 'main.py'
@@ -55,9 +59,8 @@ jobs:
               - 'scripts/build-backend.ps1'
               - 'scripts/build-backend-macos.sh'
               - 'scripts/macos-signature-audit.sh'
-              - 'scripts/build-all.ps1'
-              - 'scripts/build-all-macos.sh'
-              - 'apps/dsa-desktop/**'
+              - 'scripts/build-desktop-macos.sh'
+              - 'apps/client/electron/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/desktop-release.yml'
       - name: 🧭 Filter backend-safe frontend paths
@@ -68,7 +71,7 @@ jobs:
           filters: |
             backend_non_web:
               - '**'
-              - '!apps/dsa-web/**'
+              - '!apps/client/web/**'
 
   ai-governance:
     name: ai-governance
@@ -240,10 +243,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/dsa-web/package-lock.json
+          cache-dependency-path: apps/client/web/package-lock.json
       - name: 📦 Install Web dependencies
         shell: pwsh
-        run: npm ci --prefix apps/dsa-web
+        run: npm ci --prefix apps/client/web
       - name: 🧊 Build and verify frozen backend
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1
@@ -267,9 +270,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/dsa-web/package-lock.json
+          cache-dependency-path: apps/client/web/package-lock.json
       - name: 📦 Install Web dependencies
-        run: npm ci --prefix apps/dsa-web
+        run: npm ci --prefix apps/client/web
       - name: 🧊 Build and verify frozen backend
         run: bash scripts/build-backend-macos.sh
       - name: 📦 Build and verify unsigned desktop package
@@ -282,7 +285,7 @@ jobs:
     if: needs.changes.outputs.frontend == 'true'
     defaults:
       run:
-        working-directory: apps/dsa-web
+        working-directory: apps/client/web
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v5
@@ -291,10 +294,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/dsa-web/package-lock.json
+          cache-dependency-path: apps/client/web/package-lock.json
       - name: 📦 Install
         run: npm ci
       - name: 🔎 Lint
         run: npm run lint
+      - name: 🧪 Unit tests (vitest)
+        run: npm run test
       - name: 🏗️ Build
         run: npm run build

@@ -8,8 +8,8 @@
 
 - 遵循现有目录边界：
   - 后端逻辑优先放在 `src/`、`data_provider/`、`api/`、`bot/`
-  - Web 前端改动在 `apps/dsa-web/`
-  - 桌面端改动在 `apps/dsa-desktop/`
+  - Web 前端改动在 `apps/client/web/`
+  - 桌面端改动在 `apps/client/electron/`
   - 部署与流水线改动在 `scripts/`、`.github/workflows/`、`docker/`
 - 未经明确确认，不执行 `git commit`、`git tag`、`git push`。
 - commit message 使用英文，不添加 `Co-Authored-By`。
@@ -62,8 +62,8 @@ python scripts/check_ai_assets.py
 - 关键入口：
   - `main.py`：分析任务主入口
   - `server.py`：FastAPI 服务入口
-  - `apps/dsa-web/`：Web 前端
-  - `apps/dsa-desktop/`：Electron 桌面端
+  - `apps/client/web/`：Web 前端
+  - `apps/client/electron/`：Electron 桌面端
   - `.github/workflows/`：CI、发布、每日任务
 - 核心职责：
   - `src/core/`：主流程编排
@@ -105,16 +105,26 @@ python -m pytest -m "not network"
 python -m py_compile <changed_python_files>
 ```
 
+### 本地环境与已知坑
+
+- 解释器用仓库根目录的 `.venv/`（`.venv/Scripts/python.exe`）。系统 Anaconda `python` 是 pydantic 1.x，`import api.*` 会直接 ImportError，跑测试/服务不要用它；`.venv` 缺 `pytest-timeout` 时先补装（CI 由 `.github/requirements-ci.txt` 安装）。
+- 本地离线全量套件约有 200 个**既有失败**（过期 patch 目标，如 `data_provider.base.record_provider_run`、`src.analyzer.get_config`），不要试图在本地清零，也不要据 local 红灯判定改动有问题。验证"零回归"的正确姿势：`git worktree add` 一个 HEAD 基线，跑同组测试，对比两边 `tests/.pytest_cache/v/cache/lastfailed` 的差集。
+- Windows checkout 不展开符号链接：工作区里 `CLAUDE.md` 是普通文件，`python scripts/check_ai_assets.py` 本地必报 "CLAUDE.md must be a symlink"，属环境现象，CI（ubuntu）不受影响。
+- `scripts/ci_gate.sh`、`scripts/test.sh` 假设 bash + `python3`；Windows 侧在 Git Bash 里跑，或直接用 `.venv` 的 python 调 pytest。
+- 前端测试已接入 web-gate（vitest，约 1100 用例，本地全量约 80s）；桌面端 `npm test` 是 node:test（约 50 用例，秒级）。`npm run test:smoke` 是 playwright，不在 CI 门禁内。
+- 新闻搜索依赖 provider key（BOCHA/TAVILY/BRAVE/SERPAPI/MINIMAX/ANSPIRE，见 `.env.example`）。key 全空时只剩 SearXNG 公共实例自动发现，网络受限环境极易 0 结果——排查"报告无新闻"先确认 key 已填且启动日志有对应"已配置 ... 搜索"行。
+- `pipeline_runs.trigger` 只是标签：任何 `force=False` 的 `engine.run()` 都记为 `"cron"`（包括 API 触发），排查真实触发源不要只看这个字段。
+
 ### Web / Desktop
 
 ```bash
-cd apps/dsa-web
+cd apps/client/web
 npm ci
 npm run lint
 npm run build
 
-cd ../dsa-desktop
-npm install
+cd apps/client/electron
+npm ci
 npm run build
 ```
 
@@ -154,7 +164,7 @@ gh run view <run_id> --log-failed
 | `ai-governance` | `.github/workflows/ci.yml` | 校验 `AGENTS.md` / `CLAUDE.md` / `.github` 指令 / `.claude/skills` 关系 | 是 |
 | `backend-gate` | `.github/workflows/ci.yml` | 执行 `./scripts/ci_gate.sh` | 是 |
 | `docker-build` | `.github/workflows/ci.yml` | Docker 构建与关键模块导入 smoke | 是 |
-| `web-gate` | `.github/workflows/ci.yml` | 前端改动时执行 `npm run lint` + `npm run build` | 是（触发时） |
+| `web-gate` | `.github/workflows/ci.yml` | 前端改动时执行 `npm run lint` + `npm run test`（vitest）+ `npm run build` | 是（触发时） |
 | `network-smoke` | `.github/workflows/network-smoke.yml` | `pytest -m network` + `scripts/test.sh quick` | 否，观测项 |
 | `pr-review` | `.github/workflows/pr-review.yml` | PR 静态检查 + AI 审查 + 自动标签 | 否，辅助项 |
 
@@ -169,17 +179,17 @@ gh run view <run_id> --log-failed
   - 若影响 API、任务编排、报告生成、通知发送、数据源 fallback、认证、调度，交付说明中要写明是否覆盖了对应路径。
 
 - Web 前端改动：
-  - 适用范围：`apps/dsa-web/`
-  - 默认执行：`cd apps/dsa-web && npm ci && npm run lint && npm run build`
+  - 适用范围：`apps/client/web/`
+  - 默认执行：`cd apps/client/web && npm ci && npm run lint && npm run build`
   - 若涉及 API 联调、路由、状态管理、Markdown/图表渲染或认证状态，交付说明中要明确说明联动面和未覆盖风险。
 
 - 桌面端改动：
-  - 适用范围：`apps/dsa-desktop/`、`scripts/run-desktop.ps1`、`scripts/build-desktop*.ps1`、`scripts/build-*.sh`、`docs/desktop-package.md`
+  - 适用范围：`apps/client/electron/`、`scripts/build-desktop-macos.sh`、`scripts/build-*.sh`、`docs/DEPLOYMENT.md`
   - 默认执行：先构建 Web，再构建桌面端
   - 如受平台限制未能完整验证，需要明确说明是否验证了 Web 构建产物、Electron 构建以及 Release 工作流影响。
 
 - API / Schema / 认证联动改动：
-  - 适用范围：`api/**`、`src/schemas/**`、`src/services/**`、`apps/dsa-web/**`、`apps/dsa-desktop/**`
+  - 适用范围：`api/**`、`src/schemas/**`、`src/services/**`、`apps/client/web/**`、`apps/client/electron/**`
   - 至少覆盖对应后端验证 + 受影响客户端构建验证。
   - 若涉及登录、Cookie、会话、轮询状态、字段增删或枚举变化，必须明确写出兼容性影响。
 
