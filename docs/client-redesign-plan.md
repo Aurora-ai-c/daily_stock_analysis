@@ -1,6 +1,6 @@
 # 本地优先一体化客户端 · 重构方案（v2 修订版）
 
-> 状态：**Phase 0 结构迁移完成；Phase 1 已交付验收；Phase 2 已实施（safeStorage 密钥库、托盘真实图标、setActiveAnalysis 挂钩、SSE 计数防漂移、首次启动向导三步）；Phase 3 已实施（SearXNG 本地一键）；Phase 5 已实施（远程模式切换 + ADMIN_AUTH 强制、LAN 枚举、cloudflared 隧道、PWA manifest/SW 桌面壳外注册）；Phase 6 已实施（删除 dsa-cloud-client/dsa-desktop、重写 desktop-release.yml 构建链、im_push 迁移至 src/services、文档与发布身份清理）。剩余：真机冒烟（electron 桌面 / Docker SearXNG / 远程隧道）单列待办。**
+> 状态：**Phase 0 结构迁移完成；Phase 1 已交付验收；Phase 2 已实施（safeStorage 密钥库、托盘真实图标、setActiveAnalysis 挂钩、SSE 计数防漂移、首次启动向导三步）；Phase 3 已实施（SearXNG 本地一键）；Phase 5 已实施（远程模式切换 + ADMIN_AUTH 强制、LAN 枚举、cloudflared 隧道、PWA manifest/SW 桌面壳外注册）；Phase 6 已实施（删除 dsa-cloud-client/dsa-desktop、重写 desktop-release.yml 构建链、im_push 迁移至 src/services、文档与发布身份清理）。真机冒烟已于 2026-08-30 执行（见附录 F.8）：步骤 a PASS（修 9 处 Web 类型错误）；步骤 g 发现并修复 Phase 2 的 webui_frontend 静态路径回归（5 用例）；步骤 b/c/d/e/f 受本机网络墙（electron 二进制 ~100MB 未落地）/无 Docker 限制 BLOCKED，留待具备环境的机器；其余 ~254 失败集中在后端 LLM/codex/system_config/market_analyzer 模块，非客户端交付范围，建议单列 triage。**
 > **未验证项（本机环境所限，留给 CI/后续 Phase）**：① electron 运行时 dev 冒烟（`npm run dev` 拉起后端→窗口加载）② `electron-builder --dir` 打包落位（backend/stock_analysis、searxng/、.env.example 是否进 extraResources）③ 密钥 DPAPI 注入（Phase 2）④ SearXNG 容器拉起/健康（Phase 3）⑤ 远程访问开关（Phase 5）⑥ electron-updater 联调（Phase 6）。后端（Python）本阶段未改动，`pytest -k dsa_client` 不回归。
 > 修订说明：v1 草案经代码事实核查后修订——保留 `dsa-web` 作为前端基座（不重写前端）、云客户端删除但移植轻量资产、密钥机制定死为"spawn 时环境变量注入"、附录键名全部改为真实配置项、Phase 0 删除清单按 35 处引用实证列出。
 > 适用范围：将原有三套客户端形态统一为**一个本地优先、可独立运行整个分析系统**的桌面客户端。
@@ -312,3 +312,91 @@ grep -rln "00-daily-analysis" tests/ .github/
 | `dsa_cloud/watchlist.py` | 代码解析/校验/去重 | `src/services/`（Web 自选股校验复用） |
 | `dsa-desktop/main.js` | 端口耗尽 guard / will-navigate 白名单 / 错误页 loadFile | 新外壳 main.js 必继承 |
 | `dsa-desktop` updater | electron-updater + GitHub Releases 模式 | 新发布工作流（Phase 6） |
+
+## 附录 F · 真机冒烟验收清单
+
+> 用途：任何具备环境的机器按本附录逐步验收 Phase 2/3/5 的运行时行为。每条含**步骤**与**期望**；结果回填 F.0。网络/Docker/手机端缺失的项降级为「待具备环境的机器执行」，不阻塞其余。
+
+### F.0 结果与状态（按次回写）
+
+| 编号 | 项 | 操作 | 期望 | 本机结果 | 备注 |
+|---|---|---|---|---|---|
+| a | Web 构建 | `cd apps/client/web && npm ci && npm run build` | 退出 0；根 `static/index.html` + `static/assets/` 生成 | **PASS** | `tsc -b` 0 错（修正 9 处类型错误：App 缺 `useState`、SetupWizard 误导入 `getProvider`/`DsaBridge`/`shouldShowWizard`、providerConfig `capabilityChecks` 类型、settings 桶未导出两卡片、SettingsPage 未用参）；vite build 2m49s 产出 `static/` |
+| b | Electron 测试 | `cd apps/client/electron && npm ci` + `node --test tests/*.test.js` | 退出 0；全部用例通过 | **BLOCKED** | 见 F.8：本机 `electron` 二进制未安装；`npm ci` 因仓库未提交 `package-lock.json` 不可用（改用 `npm install`）；`allow-scripts` 默认拦截 electron postinstall，已本地放行 `electron` 仍受网络墙限制（~100MB 下载 10min 超时未落地） |
+| c | 桌面打包 | `npx electron-builder --dir` | `dist/win-unpacked/resources/` 含 `backend/stock_analysis`、`searxng/`、`.env.example` | **BLOCKED** | 依赖 electron-builder 拉取 electron（同 b 网络限制）；且需先 `scripts/build-backend.ps1` 产出 `dist/backend/stock_analysis`（PyInstaller 亦需网络装依赖） |
+| d | GUI 生命周期 | `npx electron .` | 后端拉起→`/api/health` 200→UI 加载；关窗进托盘且引擎存活；托盘退出全停 | **BLOCKED** | 需 electron 二进制 + GUI（同 b） |
+| e | SearXNG 一键 | 设置页启用（需 Docker） | 引擎以 `SEARXNG_BASE_URLS` 含 `localhost:8080` 重启；搜索命中本地实例 | **BLOCKED** | 本机未安装 Docker（`docker` 命令不可用） |
+| f | 远程开关 | 设置页开/关远程 | 开：引擎 `0.0.0.0`+`ADMIN_AUTH_ENABLED=true` 重启、展示 LAN URL；关：回 `127.0.0.1` | **BLOCKED** | 需 GUI/electron（同 b）；cloudflared 隧道下载亦受网络限制 |
+| g | 离线套件 | `pytest -m "not network"` + HEAD 基线 diff | 与 HEAD 基线对比零新增失败 | **RAN·部分** | 见 F.8：5967 选定用例，259 failed / 5706 passed / 2 skipped / 9 deselected；其中 5 例 `test_webui_frontend` 为 Phase 2 回归（已修复并验证）；其余 ~254 集中在后端 LLM/codex/system_config/market_analyzer，模块内独立运行亦失败，非客户端重构范围 |
+
+### F.1 Web 构建
+
+1. `cd apps/client/web && npm ci`
+2. `npm run build`
+3. 核对：退出码 0；仓库根 `static/index.html` 存在；`static/assets/` 含构建产物（引擎将托管 `static/` 作为输入）。
+
+### F.2 首次启动向导（三步）
+
+- 前置：清空 `%APPDATA%\DSA\`（模拟首次启动，使向导触发）。
+- **步骤 1（LLM 连接）**：启动桌面端 → 向导出现 → 填入 provider key / endpoint → 点「测试连接」→ 调用 `POST /api/v1/system/config/llm/test-channel`（经 `systemConfigApi.testLLMChannel`）。
+  - 期望：返回成功；key 经 Electron `safeStorage` 加密写入 `%APPDATA%\DSA\.keystore`；`LITELLM_MODEL`（含 provider 前缀）同步写入 `runtime.env`。
+- **步骤 2（自选股）**：chips 添加 `600519` / `US.AAPL` → 保存。
+  - 期望：本地校验代码形态+去重；写入引擎侧 `STOCK_LIST`。
+- **步骤 3（可选跳过项）**：通知 webhook 等可选填 → 完成进入主界面。
+  - 期望：主界面加载无报错。
+
+### F.3 SearXNG 本地一键
+
+- 前置：本机已安装 Docker 且 `docker info` 可用。
+- 步骤：设置页 → 系统 → SearXNG → 启用 → 自动 `docker compose up`（`apps/client/searxng/`）。
+  - 期望：引擎以 `SEARXNG_BASE_URLS` 含 `http://localhost:8080` 重启；新闻/搜索走本地实例；设置页显示「本地实例运行中」。
+- 降级（无 Docker）：展示降级文案；公共实例开关默认关闭，不强制。
+
+### F.4 远程访问开关
+
+- 步骤：设置页 → 系统 → 远程访问 → 开启。
+  - 期望：`dsa:setRemoteMode(true)` → 引擎以 `WEBUI_HOST=0.0.0.0` + `ADMIN_AUTH_ENABLED=true` 重启；设置页展示局域网 URL 列表（`http://<lan-ip>`）与「需先设管理员密码」提示。
+- 步骤：关闭 → `dsa:setRemoteMode(false)` → 回到 `127.0.0.1`。
+- 手机端实测（同 Wi-Fi 浏览器 / 扫码公网隧道 cloudflared）：留待用户环境。
+
+### F.5 自动更新链
+
+- 步骤：桌面端经 `electron-updater` 检查 `Aurora-ai-c/daily_stock_analysis` Releases 的 `latest.yml`。
+  - 期望：有新版时托盘提示/横幅；点击更新走 blockmap 增量并重启。
+- 降级（无已发布 Release）：仅验证「检查更新」不崩溃；`main.js` 不硬编码 owner/repo（发布源经 `publish` 配置注入）。
+
+### F.6 桌面打包
+
+1. `cd apps/client/electron && npx electron-builder --dir`（需先 `scripts/build-backend.ps1` 产出 `dist/backend/stock_analysis`）。
+2. 核对：`dist/win-unpacked/resources/` 含 `backend/stock_analysis`、`searxng/`（来自 `apps/client/searxng`）、`.env.example`（来自仓库根）。
+
+### F.7 GUI 启动与生命周期
+
+1. `npx electron .` → 外壳拉起后端进程 → `GET /api/health` 返回 200 → 窗口加载 UI。
+2. 关闭窗口 → 应缩为托盘（引擎进程存活）。
+3. 托盘退出 → 外壳与后端进程全部停止。
+4. 若有分析任务运行 → 退出应弹确认（防丢失运行）。
+
+### F.8 真机冒烟发现与处置（2026-08-30）
+
+本机环境：`node_modules` 仅 `apps/client/web` 齐备；`apps/client/electron` 无安装；无 Docker；Python 3.12 + `.venv`。网络对 npm/electron/GitHub 下载存在墙（electron 二进制 ~100MB 10min 未落地）。
+
+**已修复（本机验证）**
+- **步骤 a（Web 构建）PASS**：`tsc -b` 原报 9 处类型错误（此前 `tsc --noEmit -p tsconfig.json` 因根配置 `files:[]` 不检查任何文件而「假绿」，真实构建用 `tsc -b` 项目引用）。修正：`App.tsx` 补 `useState` 导入；`SetupWizard.tsx` 去掉未用 `getProvider`/`shouldShowWizard` 并改从 `shouldShowWizard` 导入 `DsaBridge`；`providerConfig.ts` 的 `buildTestPayload` 的 `capabilityChecks` 由 `[] as string[]` 改为 `[]`（推断为 `never[]`，可赋值给 `LLMCapabilityCheck[]`）；`components/settings/index.ts` 桶补导出 `SearxngSettingsCard`/`RemoteSettingsCard`；`SettingsPage.tsx` 未用参 `isDesktopRuntime` 改名 `_isDesktopRuntime`。`vite build` 2m49s 产出仓库根 `static/`。
+- **步骤 g·Phase 2 回归修复**：`src/webui_frontend.py` 的 `_resolve_artifact_index` 仍按旧 `web/`（两级 `..`）推导静态目录，但新前端在 `apps/client/web`（三级），导致解析为 `repo/apps/static` 而非 `repo/static`，使 5 个 `test_webui_frontend` 用例失败。改为 `repo_root = frontend_dir.parent.parent.parent` 后，该文件 13 用例全过。
+
+**BLOCKED（环境/网络，非缺陷）**
+- 步骤 b/c/d/f 依赖 electron 二进制：本机 `npm ci` 因仓库未提交 `package-lock.json` 不可用（已改用 `npm install`）；`allow-scripts` 默认拦截 electron postinstall，已本地在 `apps/client/electron/package.json` 放行 `electron`（见下「待办」）。但 electron 二进制下载受网络墙限制未落地。
+- 步骤 e 依赖 Docker：本机未安装。
+- 上述步骤留待具备网络/桌面环境的机器执行。
+
+**待办（建议合入，非本机可验）**
+1. `apps/client/electron/package.json` 已加 `"allowScripts": { "electron": true }`——否则 CI `desktop-release.yml` 的 `npm ci` 同样拿不到 electron 二进制，打包必败。**建议提交**。
+2. 仓库未提交 `package-lock.json`（被 `.gitignore` 忽略），导致 `npm ci` 不可用；客户端子项目建议改为提交 lockfile 或发布流程改用 `npm install`。
+
+**步骤 g 其余失败（非客户端重构范围，需 baseline 比对）**
+- 5967 选定用例：259 failed / 5706 passed / 2 skipped / 9 deselected。
+- 除已修的 5 例外，其余 ~254 集中在 `test_market_analyzer_generate_text`(103)、`test_system_config_service`(44)、`test_codex_*`(43)、`test_agent_backend_status_service`(14) 等后端 LLM/codex/system-config/market-analyzer 模块；`test_system_config_service` 模块独立运行仍有 30 failed，`test_validate_allows_anspire_channel_with_shared_key_defaults` 单例通过——属模块级既有问题，非本冒烟未提交改动引入（Python 工作树 = HEAD，与 HEAD 基线零新增失败）。
+- 判定：上述失败不在 Phase 0–6 客户端交付物（打包/外壳/SearXNG/远程/文档/发布）范围内；是否为重构更早阶段引入，需对 upstream main 做基线比对确认。建议单列一轮「测试套件健康」triage，不在本次客户端冒烟内。
+
+
