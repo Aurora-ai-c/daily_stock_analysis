@@ -63,5 +63,8 @@
       "hardenedRuntime": false,
       "target": "dmg"
     }
+  },
+  "allowScripts": {
+    "electron": true
   }
 }
