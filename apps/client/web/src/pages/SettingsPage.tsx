@@ -314,7 +314,7 @@ function getDesktopUpdateNotice(
   return null;
 }
 
-function formatEnvBackupFilename(isDesktopRuntime: boolean) {
+function formatEnvBackupFilename(_isDesktopRuntime: boolean) {
   const now = new Date();
   const pad = (value: number) => value.toString().padStart(2, '0');
   const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;

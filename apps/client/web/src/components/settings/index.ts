@@ -11,4 +11,6 @@ export * from './SettingsSectionCard';
 export * from './SettingsCategoryNav';
 export * from './AuthSettingsCard';
 export * from './GenerationBackendStatusPanel';
+export * from './SearxngSettingsCard';
+export * from './RemoteSettingsCard';
 export * from './AgentBackendStatusPanel';

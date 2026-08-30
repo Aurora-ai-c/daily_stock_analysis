@@ -4,12 +4,10 @@ import type { TestLLMChannelResponse } from '../../types/systemConfig';
 import { useWatchlist } from '../../hooks/useWatchlist';
 import {
   PROVIDERS,
-  getProvider,
   buildTestPayload,
   deriveWizardSecrets,
-  type DsaBridge,
 } from './providerConfig';
-import { shouldShowWizard } from './shouldShowWizard';
+import { type DsaBridge } from './shouldShowWizard';
 
 function getDsa(): DsaBridge | undefined {
   return (window as unknown as { dsa?: DsaBridge }).dsa;

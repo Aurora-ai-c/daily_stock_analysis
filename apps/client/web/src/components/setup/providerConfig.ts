@@ -26,7 +26,7 @@ export function buildTestPayload(provider: ProviderConfig, apiKey: string, model
     baseUrl: provider.baseUrl,
     apiKey,
     models: model ? [model] : [],
-    capabilityChecks: [] as string[],
+    capabilityChecks: [],
     useSavedSecret: false,
   };
 }

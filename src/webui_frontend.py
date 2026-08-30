@@ -74,7 +74,9 @@ def _max_mtime(paths: Iterable[Path]) -> float:
 
 def _resolve_artifact_index(frontend_dir: Path) -> Path:
     # Prefer static/index.html because it is the configured output path in this repo.
-    static_index = (frontend_dir / ".." / ".." / "static" / "index.html").resolve()
+    # frontend_dir is <repo>/apps/client/web, so the repo root is three levels up.
+    repo_root = frontend_dir.parent.parent.parent
+    static_index = (repo_root / "static" / "index.html").resolve()
     dist_index = frontend_dir / "dist" / "index.html"
     build_index = frontend_dir / "build" / "index.html"
     if static_index.exists():
