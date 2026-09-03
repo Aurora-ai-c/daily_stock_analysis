@@ -4,8 +4,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '17 18 * * *'  # daily online test sweep (UTC)
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
